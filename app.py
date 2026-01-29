@@ -71,7 +71,7 @@ def converter_docx_para_pdf(docx_path, output_dir):
 
 # --- INTERFACE DO UTILIZADOR ---
 
-st.title("📑 Automação de Relatórios: Backup Tático")
+st.title("📑 Automação de Relatórios")
 st.markdown("Preencha os dados abaixo e anexe as evidências para gerar o relatório em **PDF**.")
 
 # Definição dos campos conforme o Relatório Modelo
@@ -116,7 +116,7 @@ with st.form("form_gerador"):
         contexto["MANUAL_DESTINO_TRANSFERENCIA"] = " / ".join([d.strip() for d in destinos_input.split('\n') if d.strip()])
 
     with col2:
-        st.subheader("📁 Anexos e Evidências")
+        st.subheader("📁 Arquivos")
         uploads = {}
         for marcador, label in campos_upload.items():
             uploads[marcador] = st.file_uploader(f"{label}", type=['png', 'jpg', 'jpeg', 'pdf'], key=f"up_{marcador}")
@@ -197,4 +197,4 @@ if botao_gerar:
 
 # --- RODAPÉ ---
 st.markdown("---")
-st.caption("Desenvolvido por Leonardo Barcelos Martins - Backup Tático")
+st.caption("Desenvolvido por Leonardo Barcelos Martins")
