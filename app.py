@@ -9,58 +9,72 @@ import tempfile
 
 # --- CONFIGURAÇÕES DA PÁGINA ---
 st.set_page_config(
-    page_title="Gerador de Relatório Assistencial - UPA Nova Cidade",
+    page_title="Gerador de Relatórios Assistenciais",
     page_icon="📑",
     layout="wide"
 )
 
-# --- CONFIGURAÇÕES DE DESIGN (PO DECISION) ---
-# Redução de 160mm para 140mm para garantir que a imagem caiba logo abaixo do título
-LARGURA_PADRAO = Mm(140)
+# --- FUNÇÕES AUXILIARES ---
 
 def converter_pdf_para_imagens(doc_template, arquivo_pdf):
-    """Converte cada página de um PDF em objetos InlineImage para o Word."""
+    """
+    Converte cada página de um PDF enviado em objetos InlineImage para o Word.
+    """
     imagens = []
     try:
+        # Lê o conteúdo do ficheiro enviado
         pdf_stream = arquivo_pdf.read()
         pdf_doc = fitz.open(stream=pdf_stream, filetype="pdf")
+        
         for pagina in pdf_doc:
-            # Renderização de alta qualidade (2x zoom)
+            # Renderiza a página como imagem (zoom de 2x para manter legibilidade)
             pix = pagina.get_pixmap(matrix=fitz.Matrix(2, 2))
             img_byte_arr = io.BytesIO(pix.tobytes())
-            imagens.append(InlineImage(doc_template, img_byte_arr, width=LARGURA_PADRAO))
+            # Define a largura padrão (140mm cabe bem em A4 com margens)
+            imagens.append(InlineImage(doc_template, img_byte_arr, width=Mm(140)))
+            
         pdf_doc.close()
         return imagens
     except Exception as e:
-        st.error(f"Erro ao processar PDF: {e}")
+        st.error(f"Erro ao processar o PDF anexado: {e}")
         return []
 
 def preparar_imagem_simples(doc_template, arquivo_img):
-    """Prepara imagem JPG/PNG para inserção via loop no Word com largura otimizada."""
+    """
+    Prepara uma imagem (PNG/JPG) como uma lista contendo um objeto InlineImage.
+    """
     try:
-        return [InlineImage(doc_template, arquivo_img, width=LARGURA_PADRAO)]
-    except:
+        return [InlineImage(doc_template, arquivo_img, width=Mm(160))]
+    except Exception as e:
+        st.error(f"Erro ao processar a imagem: {e}")
         return []
 
-def gerar_pdf_via_libreoffice(docx_path, output_dir):
-    """Converte o DOCX resultante para PDF usando LibreOffice Headless (Ambiente Linux)."""
+def converter_docx_para_pdf(docx_path, output_dir):
+    """
+    Usa o LibreOffice instalado no servidor (via packages.txt) para converter DOCX em PDF.
+    """
     try:
-        subprocess.run(
+        # Executa o comando headless do LibreOffice
+        result = subprocess.run(
             ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
-            check=True, capture_output=True, text=True
+            check=True,
+            capture_output=True,
+            text=True
         )
-        pdf_name = os.path.basename(docx_path).replace('.docx', '.pdf')
-        return os.path.join(output_dir, pdf_name)
+        # O LibreOffice gera o PDF com o mesmo nome na pasta de saída
+        nome_pdf = os.path.basename(docx_path).replace('.docx', '.pdf')
+        return os.path.join(output_dir, nome_pdf)
     except Exception as e:
-        st.error(f"Erro na conversão PDF: {e}")
+        st.error(f"Erro na conversão para PDF: {e}")
+        st.info("Verifique se o ficheiro 'packages.txt' contém 'libreoffice' e se o deploy foi concluído.")
         return None
 
-# --- INTERFACE DE UTILIZADOR ---
+# --- INTERFACE DO UTILIZADOR ---
 
 st.title("📑 Automação de Relatórios")
-st.markdown("Preencha os dados e anexe as evidências. O sistema otimizará o tamanho das imagens para o layout.")
+st.markdown("Preencha os dados abaixo e anexe as evidências para gerar o relatório em **PDF**.")
 
-# Definição de campos para organização em Abas
+# Definição dos campos conforme o Relatório Modelo
 campos_manuais = [
     "SISTEMA_MES_REFERENCIA", "ANALISTA_TOTAL_ATENDIMENTOS", "ANALISTA_MEDICO_CLINICO",
     "ANALISTA_MEDICO_PEDIATRA", "ANALISTA_ODONTO_CLINICO", "ANALISTA_ODONTO_PED",
@@ -69,68 +83,79 @@ campos_manuais = [
 ]
 
 campos_upload = {
-    "EXCEL_META_ATENDIMENTOS": "Grade de Metas",
-    "IMAGEM_PRINT_ATENDIMENTO": "Prints Atendimento",
-    "IMAGEM_DOCUMENTO_RAIO_X": "Doc. Raio-X",
-    "TABELA_TRANSFERENCIA": "Tabela Transferência",
-    "GRAFICO_TRANSFERENCIA": "Gráfico Transferência",
-    "TABELA_TOTAL_OBITO": "Tabela Total Óbito",
-    "TABELA_OBITO": "Tabela Óbito",
+    "EXCEL_META_ATENDIMENTOS": "Grade de Metas (Excel/Print)",
+    "IMAGEM_PRINT_ATENDIMENTO": "Print de Atendimento",
+    "IMAGEM_DOCUMENTO_RAIO_X": "Documento Raio-X",
+    "TABELA_TRANSFERENCIA": "Tabela de Transferência",
+    "GRAFICO_TRANSFERENCIA": "Gráfico de Transferência",
+    "TABELA_TOTAL_OBITO": "Tabela Total de Óbitos",
+    "TABELA_OBITO": "Tabela de Óbitos Detalhada",
     "TABELA_CCIH": "Tabela CCIH",
     "IMAGEM_NEP": "Imagens NEP",
     "IMAGEM_TREINAMENTO_INTERNO": "Treinamento Interno",
     "IMAGEM_MELHORIAS": "Imagens de Melhorias",
-    "GRAFICO_OUVIDORIA": "Gráfico Ouvidoria",
-    "PDF_OUVIDORIA_INTERNA": "Relatório Ouvidoria (PDF)",
+    "GRAFICO_OUVIDORIA": "Gráfico de Ouvidoria",
+    "PDF_OUVIDORIA_INTERNA": "Relatório de Ouvidoria (PDF)",
     "TABELA_QUALITATIVA_IMG": "Tabela Qualitativa",
-    "PRINT_CLASSIFICACAO": "Classificação de Risco"
+    "PRINT_CLASSIFICACAO": "Relatório de Classificação de Risco"
 }
 
-with st.form("main_form"):
-    tab1, tab2 = st.tabs(["✍️ Informações de Texto", "📁 Upload de Anexos"])
+with st.form("form_gerador"):
+    col1, col2 = st.columns(2)
     contexto = {}
 
-    with tab1:
-        c1, c2 = st.columns(2)
-        for i, campo in enumerate(campos_manuais):
-            col = c1 if i < 6 else c2
-            contexto[campo] = col.text_input(campo.replace("_", " "), key=f"txt_{campo}")
+    with col1:
+        st.subheader("✍️ Dados da Produção")
+        for campo in campos_manuais:
+            contexto[campo] = st.text_input(campo.replace("_", " "), placeholder=f"Introduza {campo.lower()}")
         
         st.write("---")
-        destinos = st.text_area("MANUAL DESTINO TRANSFERÊNCIA (Um por linha)", height=100)
-        contexto["MANUAL_DESTINO_TRANSFERENCIA"] = " / ".join([d.strip() for d in destinos.split("\n") if d.strip()])
+        st.subheader("🏥 Transferências")
+        destinos_input = st.text_area("Destinos de Transferência (Um por linha)", height=100)
+        # Lógica solicitada: múltiplos nomes separados por " / "
+        contexto["MANUAL_DESTINO_TRANSFERENCIA"] = " / ".join([d.strip() for d in destinos_input.split('\n') if d.strip()])
 
-    with tab2:
+    with col2:
+        st.subheader("📁 Arquivos")
         uploads = {}
-        c3, c4 = st.columns(2)
-        for i, (marcador, label) in enumerate(campos_upload.items()):
-            col = c3 if i % 2 == 0 else c4
-            uploads[marcador] = col.file_uploader(label, type=['png', 'jpg', 'pdf'], key=f"up_{marcador}")
+        for marcador, label in campos_upload.items():
+            uploads[marcador] = st.file_uploader(f"{label}", type=['png', 'jpg', 'jpeg', 'pdf'], key=f"up_{marcador}")
 
-    botao_gerar = st.form_submit_button("🚀 GERAR RELATÓRIO PDF OTIMIZADO")
+    st.write("---")
+    botao_gerar = st.form_submit_button("🚀 GERAR RELATÓRIO PDF")
 
-# --- LÓGICA DE PROCESSAMENTO ---
+# --- PROCESSAMENTO DOS DADOS ---
 
 if botao_gerar:
     if not contexto["SISTEMA_MES_REFERENCIA"]:
-        st.error("O campo 'Mês de Referência' é obrigatório.")
+        st.error("O campo 'SISTEMA MES REFERENCIA' é obrigatório.")
     else:
         try:
-            with tempfile.TemporaryDirectory() as pasta_temp:
-                docx_path = os.path.join(pasta_temp, "relatorio.docx")
-                doc = DocxTemplate("template.docx")
+            # Caminho do template no repositório
+            template_path = "template.docx"
+            
+            if not os.path.exists(template_path):
+                st.error("Ficheiro 'template.docx' não encontrado no repositório.")
+                st.stop()
 
-                # Cálculo de Indicadores
+            # Usamos uma pasta temporária para segurança dos dados
+            with tempfile.TemporaryDirectory() as pasta_temp:
+                caminho_docx_temp = os.path.join(pasta_temp, "processando.docx")
+                
+                # Inicia o motor do template
+                doc = DocxTemplate(template_path)
+                
+                # 1. Cálculo Automático da Taxa de Transferência
                 try:
-                    total = float(contexto.get("ANALISTA_TOTAL_ATENDIMENTOS", 0))
-                    trans = float(contexto.get("SISTEMA_TOTAL_DE_TRANSFERENCIA", 0))
-                    taxa = (trans / total) * 100 if total > 0 else 0
+                    total_aten = float(contexto.get("ANALISTA_TOTAL_ATENDIMENTOS", 0))
+                    total_trans = float(contexto.get("SISTEMA_TOTAL_DE_TRANSFERENCIA", 0))
+                    taxa = (total_trans / total_aten * 100) if total_aten > 0 else 0
                     contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = f"{taxa:.2f}%"
-                except:
+                except ValueError:
                     contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = "0.00%"
 
-                # Processamento de Ficheiros com Largura de 140mm
-                with st.spinner("Otimizando dimensões das imagens..."):
+                # 2. Processamento de Imagens e PDFs
+                with st.spinner("A processar anexos e a converter PDFs..."):
                     for marcador, arquivo in uploads.items():
                         if arquivo:
                             if arquivo.name.lower().endswith(".pdf"):
@@ -138,27 +163,37 @@ if botao_gerar:
                             else:
                                 contexto[marcador] = preparar_imagem_simples(doc, arquivo)
                         else:
+                            # Se não houver upload, enviamos lista vazia para o loop {% for %} não falhar
                             contexto[marcador] = []
 
+                # 3. Renderização do Word
                 doc.render(contexto)
-                doc.save(docx_path)
+                doc.save(caminho_docx_temp)
                 
-                with st.spinner("Convertendo para PDF final..."):
-                    pdf_path = gerar_pdf_via_libreoffice(docx_path, pasta_temp)
+                # 4. Conversão para PDF
+                with st.spinner("A converter para PDF (LibreOffice)..."):
+                    caminho_pdf_final = converter_docx_para_pdf(caminho_docx_temp, pasta_temp)
                     
-                    if pdf_path and os.path.exists(pdf_path):
-                        with open(pdf_path, "rb") as f:
+                    if caminho_pdf_final and os.path.exists(caminho_pdf_final):
+                        with open(caminho_pdf_final, "rb") as f:
                             pdf_bytes = f.read()
                         
                         st.success("✅ Relatório gerado com sucesso!")
-                        nome_pdf = f"Relatorio_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
-                        st.download_button("📥 Baixar PDF", pdf_bytes, nome_pdf, "application/pdf")
+                        
+                        # Nome do ficheiro de saída
+                        nome_download = f"Relatorio_Assistencial_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
+                        
+                        st.download_button(
+                            label="📥 Baixar Relatório em PDF",
+                            data=pdf_bytes,
+                            file_name=nome_download,
+                            mime="application/pdf"
+                        )
                     else:
-                        st.error("Falha na conversão para PDF.")
+                        st.error("A conversão para PDF falhou. Verifique os logs.")
         
         except Exception as e:
-            st.error(f"Erro Crítico: {e}")
-
+            st.error(f"Ocorreu um erro inesperado: {e}")
 
 # --- RODAPÉ ---
 st.markdown("---")
