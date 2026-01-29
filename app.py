@@ -50,8 +50,8 @@ def gerar_pdf(docx_path, output_dir):
         return None
 
 # --- INTERFACE (UI) ---
-st.title("📑 Automação de Relatórios - Backup Tático")
-st.caption("Versão 0.4.1 - Cálculos Médicos Automáticos e Layout Otimizado")
+st.title("📑 Automação de Relatório de Prestação - UPA Nova Cidade")
+st.caption("Versão 0.4.1")
 
 # Estrutura de campos de texto
 campos_texto_col1 = [
@@ -83,7 +83,7 @@ campos_upload = {
 }
 
 with st.form("form_v4_1"):
-    tab1, tab2 = st.tabs(["📝 Dados Manuais e Cálculos", "🖼️ Evidências Digitais"])
+    tab1, tab2 = st.tabs(["📝 Dados Manuais", "🖼️ Arquivos"])
     contexto = {}
     
     with tab1:
@@ -94,11 +94,11 @@ with st.form("form_v4_1"):
             contexto[campo] = c2.text_input(campo.replace("_", " "))
         
         st.write("---")
-        st.subheader("📊 Indicadores de Transferência (Inclusão Manual)")
+        st.subheader("📊 Indicadores de Transferência")
         c3, c4 = st.columns(2)
         contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências (Inteiro)", step=1, value=0)
         contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", value="0,00%")
-
+    
     with tab2:
         uploads = {}
         c_up1, c_up2 = st.columns(2)
