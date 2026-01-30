@@ -106,7 +106,7 @@ with st.form("form_v4_1"):
             col = c_up1 if i % 2 == 0 else c_up2
             uploads[marcador] = col.file_uploader(label, type=['png', 'jpg', 'pdf'], key=marcador)
 
-    btn_gerar = st.form_submit_button("🚀 GERAR RELATÓRIO PDF FINAL")
+    btn_gerar = st.form_submit_button("GERAR RELATÓRIO PDF FINAL")
 
 if btn_gerar:
     if not contexto["SISTEMA_MES_REFERENCIA"]:
@@ -148,7 +148,7 @@ if btn_gerar:
                             
                             nome_arquivo = f"Relatorio_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
                             st.download_button(
-                                label="📥 Baixar Relatório PDF",
+                                label="Baixar Relatório PDF",
                                 data=pdf_bytes,
                                 file_name=nome_arquivo,
                                 mime="application/pdf"
@@ -162,6 +162,7 @@ if btn_gerar:
 # --- RODAPÉ ---
 st.markdown("---")
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
+
 
 
 
