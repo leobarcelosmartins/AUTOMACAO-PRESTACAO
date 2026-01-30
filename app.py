@@ -10,7 +10,7 @@ import tempfile
 # --- CONFIGURAÇÕES DE LAYOUT ---
 st.set_page_config(page_title="Gerador de Relatórios V0.4.1", layout="wide", page_icon="📑")
 
-# Largura de 130mm (16cm) para garantir que título e imagem caibam na mesma página
+# Largura de 130mm (16,5cm) para garantir que título e imagem caibam na mesma página
 LARGURA_OTIMIZADA = Mm(165)
 
 def processar_anexo(doc_template, arquivo):
@@ -50,7 +50,7 @@ def gerar_pdf(docx_path, output_dir):
         return None
 
 # --- INTERFACE (UI) ---
-st.title("📑 Automação de Relatório de Prestação - UPA Nova Cidade")
+st.title("Automação de Relatório de Prestação - UPA Nova Cidade")
 st.caption("Versão 0.4.1")
 
 # Estrutura de campos de texto
@@ -83,7 +83,7 @@ campos_upload = {
 }
 
 with st.form("form_v4_1"):
-    tab1, tab2 = st.tabs(["📝 Dados Manuais", "🖼️ Arquivos"])
+    tab1, tab2 = st.tabs(["Dados Manuais", "Arquivos"])
     contexto = {}
     
     with tab1:
@@ -162,6 +162,7 @@ if btn_gerar:
 # --- RODAPÉ ---
 st.markdown("---")
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
+
 
 
 
