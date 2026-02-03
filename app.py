@@ -8,13 +8,13 @@ import subprocess
 import tempfile
 import pandas as pd
 import matplotlib.pyplot as plt
-from openpyxl import load_workbook
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.4.4", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.4.1", layout="wide")
 
-# Largura de 165mm conforme solicitado para preenchimento da página
+# Largura de 165mm (conforme solicitado) para garantir o preenchimento da página nas imagens padrão
 LARGURA_OTIMIZADA = Mm(165)
+
 def excel_para_imagem(doc_template, arquivo_excel):
     """
     Lê o intervalo D3:E16 da aba TRANSFERENCIAS, limpa nulos, 
@@ -92,7 +92,7 @@ def excel_para_imagem(doc_template, arquivo_excel):
         return []
 
 def processar_anexo(doc_template, arquivo, marcador=None):
-    """Processa PDFs, Imagens e Excel de forma específica por marcador."""
+    """Detecta o tipo de arquivo e retorna lista de InlineImages."""
     if not arquivo:
         return []
     
@@ -100,7 +100,7 @@ def processar_anexo(doc_template, arquivo, marcador=None):
     try:
         extensao = arquivo.name.lower()
         
-        # Regra específica para a Tabela de Transferência vinda do Excel
+        # Lógica para o campo específico de Tabela de Transferência
         if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
             return excel_para_imagem(doc_template, arquivo)
 
@@ -120,7 +120,7 @@ def processar_anexo(doc_template, arquivo, marcador=None):
         return []
 
 def gerar_pdf(docx_path, output_dir):
-    """Conversão DOCX para PDF via LibreOffice."""
+    """Conversão via LibreOffice Headless."""
     try:
         subprocess.run(
             ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
@@ -129,13 +129,14 @@ def gerar_pdf(docx_path, output_dir):
         pdf_path = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
         return pdf_path
     except Exception as e:
-        st.error(f"Erro na conversão para PDF: {e}")
+        st.error(f"Erro na conversão PDF: {e}")
         return None
 
-# --- INTERFACE (UI LIMPA - SEM ÍCONES/EMOJIS) ---
-st.title("Automacao de Relatorio de Prestacao - UPA Nova Cidade")
-st.caption("Versao 0.4.4")
+# --- INTERFACE (UI) ---
+st.title("Automação de Relatório de Prestação - UPA Nova Cidade")
+st.caption("Versão 0.4.1")
 
+# Estrutura de campos de texto
 campos_texto_col1 = [
     "SISTEMA_MES_REFERENCIA", "ANALISTA_TOTAL_ATENDIMENTOS", "ANALISTA_MEDICO_CLINICO",
     "ANALISTA_MEDICO_PEDIATRA", "ANALISTA_ODONTO_CLINICO"
@@ -149,21 +150,21 @@ campos_upload = {
     "EXCEL_META_ATENDIMENTOS": "Grade de Metas",
     "IMAGEM_PRINT_ATENDIMENTO": "Prints Atendimento",
     "IMAGEM_DOCUMENTO_RAIO_X": "Doc. Raio-X",
-    "TABELA_TRANSFERENCIA": "Tabela Transferencia (Excel - Aba TRANSFERENCIAS)",
-    "GRAFICO_TRANSFERENCIA": "Grafico Transferencia",
-    "TABELA_TOTAL_OBITO": "Tabela Total Obito",
-    "TABELA_OBITO": "Tabela Obito",
+    "TABELA_TRANSFERENCIA": "Tabela Transferência",
+    "GRAFICO_TRANSFERENCIA": "Gráfico Transferência",
+    "TABELA_TOTAL_OBITO": "Tabela Total Óbito",
+    "TABELA_OBITO": "Tabela Óbito",
     "TABELA_CCIH": "Tabela CCIH",
     "IMAGEM_NEP": "Imagens NEP",
     "IMAGEM_TREINAMENTO_INTERNO": "Treinamento Interno",
     "IMAGEM_MELHORIAS": "Imagens de Melhorias",
-    "GRAFICO_OUVIDORIA": "Grafico Ouvidoria",
-    "PDF_OUVIDORIA_INTERNA": "Relatorio Ouvidoria (PDF)",
+    "GRAFICO_OUVIDORIA": "Gráfico Ouvidoria",
+    "PDF_OUVIDORIA_INTERNA": "Relatório Ouvidoria (PDF)",
     "TABELA_QUALITATIVA_IMG": "Tabela Qualitativa",
-    "PRINT_CLASSIFICACAO": "Classificacao de Risco"
+    "PRINT_CLASSIFICACAO": "Classificação de Risco"
 }
 
-with st.form("form_v4_2"):
+with st.form("form_v4_1"):
     tab1, tab2 = st.tabs(["Dados Manuais", "Arquivos"])
     contexto = {}
     
@@ -175,61 +176,59 @@ with st.form("form_v4_2"):
             contexto[campo] = c2.text_input(campo.replace("_", " "))
         
         st.write("---")
-        st.subheader("Indicadores de Transferencia")
+        st.subheader("Indicadores de Transferência")
         c3, c4 = st.columns(2)
-        contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferencias (Inteiro)", step=1, value=0)
-        contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferencia (Ex: 0,76%)", value="0,00%")
+        contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências (Inteiro)", step=1, value=0)
+        contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", value="0,00%")
 
     with tab2:
         uploads = {}
         c_up1, c_up2 = st.columns(2)
         for i, (marcador, label) in enumerate(campos_upload.items()):
             col = c_up1 if i % 2 == 0 else c_up2
-            formatos = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if marcador == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
-            uploads[marcador] = col.file_uploader(label, type=formatos, key=marcador)
+            # Suporte a Excel especificamente para a Tabela de Transferência
+            tipos = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if marcador == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
+            uploads[marcador] = col.file_uploader(label, type=tipos, key=marcador)
 
-    btn_gerar = st.form_submit_button("GERAR RELATORIO PDF FINAL")
+    btn_gerar = st.form_submit_button("GERAR RELATÓRIO PDF FINAL")
 
 if btn_gerar:
     if not contexto["SISTEMA_MES_REFERENCIA"]:
-        st.error("O campo Mês de Referência é obrigatório.")
+        st.error("O campo 'Mês de Referência' é obrigatório.")
     else:
         try:
-            # Cálculo Automático de Médicos
+            # Cálculo Automático: Soma de Médicos
             try:
                 m_clinico = int(contexto.get("ANALISTA_MEDICO_CLINICO", 0) or 0)
                 m_pediatra = int(contexto.get("ANALISTA_MEDICO_PEDIATRA", 0) or 0)
                 contexto["SISTEMA_TOTAL_MEDICOS"] = m_clinico + m_pediatra
-            except:
-                contexto["SISTEMA_TOTAL_MEDICOS"] = "Erro no calculo"
+            except Exception:
+                contexto["SISTEMA_TOTAL_MEDICOS"] = "Erro no cálculo"
 
+            # Processamento do Documento
             with tempfile.TemporaryDirectory() as pasta_temp:
                 docx_temp = os.path.join(pasta_temp, "relatorio_final.docx")
                 doc = DocxTemplate("template.docx")
 
-                with st.spinner("Processando anexos e extraindo dados..."):
+                with st.spinner("Processando anexos e cálculos..."):
                     for marcador, arquivo in uploads.items():
-                        # Passa o marcador para tratamento específico do Excel
                         contexto[marcador] = processar_anexo(doc, arquivo, marcador)
 
-                # Mapeamento para garantir compatibilidade com tags acentuadas no Word
-                if "PRINT_CLASSIFICACAO" in contexto:
-                    contexto["PRINT_CLASSIFICAÇÃO"] = contexto["PRINT_CLASSIFICACAO"]
-
+                # Renderiza o Word com o dicionário de contexto completo
                 doc.render(contexto)
                 doc.save(docx_temp)
                 
-                with st.spinner("Convertendo para PDF..."):
+                with st.spinner("A converter para PDF..."):
                     pdf_final = gerar_pdf(docx_temp, pasta_temp)
                     
                     if pdf_final and os.path.exists(pdf_final):
                         with open(pdf_final, "rb") as f:
                             pdf_bytes = f.read()
-                            st.success("✅ Relatorio gerado com sucesso.")
+                            st.success("Relatório gerado com sucesso.")
                             
                             nome_arquivo = f"Relatorio_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
                             st.download_button(
-                                label="Baixar Relatorio PDF",
+                                label="Baixar Relatório PDF",
                                 data=pdf_bytes,
                                 file_name=nome_arquivo,
                                 mime="application/pdf"
@@ -239,13 +238,7 @@ if btn_gerar:
 
         except Exception as e:
             st.error(f"Erro Crítico no Sistema: {e}")
-
+            
+# --- RODAPÉ ---
 st.markdown("---")
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
-
-
-
-
-
-
-
