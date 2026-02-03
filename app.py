@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from openpyxl import load_workbook
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.4.2", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.4.3", layout="wide")
 
 # Largura de 165mm conforme solicitado para preenchimento da página
 LARGURA_OTIMIZADA = Mm(165)
@@ -235,5 +235,6 @@ if btn_gerar:
 
 st.markdown("---")
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
+
 
 
