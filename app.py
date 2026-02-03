@@ -8,51 +8,37 @@ import subprocess
 import tempfile
 import pandas as pd
 import matplotlib.pyplot as plt
+from openpyxl import load_workbook
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.4.1", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.4.3", layout="wide")
 
-# Largura de 165mm (conforme solicitado) para garantir o preenchimento da página nas imagens padrão
+# Largura de 165mm conforme solicitado para preenchimento da página
 LARGURA_OTIMIZADA = Mm(165)
 
 def excel_para_imagem(doc_template, arquivo_excel):
     """
-    Lê o intervalo D3:E16 da aba TRANSFERENCIAS, limpa nulos, 
-    formata a segunda coluna como inteiro, aplica negrito e gera imagem.
+    Lê o intervalo D3:E16 da aba TRANSFERENCIAS, limpa dados nulos,
+    aplica negrito, destaca o cabeçalho e gera uma imagem para o Word.
     """
     try:
         # Leitura do intervalo D3:E16
-        # Usamos usecols=[3, 4] que corresponde às colunas D e E
+        # skiprows=2 (pula linhas 1 e 2)
+        # nrows=14 (lê 14 linhas a partir da 3)
         df = pd.read_excel(
             arquivo_excel, 
             sheet_name="TRANSFERENCIAS", 
-            usecols=[3, 4], 
+            usecols="D:E", 
             skiprows=2, 
             nrows=14, 
             header=None
         )
         
-        # Substitui valores nulos por vazio
+        # Substitui valores nulos (NaN) por strings vazias
         df = df.fillna('')
         
-        # Garantir acesso seguro às colunas independentemente do nome atribuído pelo Pandas
-        col_labels = df.columns
-        
-        def format_inteiro(val):
-            if val == '' or val is None: return ''
-            try:
-                # Converte para float e depois int para remover decimais (.0)
-                return str(int(float(val)))
-            except (ValueError, TypeError):
-                return str(val)
-        
-        # Formata a segunda coluna (índice 1 do DataFrame resultante)
-        if len(col_labels) > 1:
-            df[col_labels[1]] = df[col_labels[1]].apply(format_inteiro)
-        
         # Configuração da figura para renderização
-        # Ajustamos o figsize para ser mais estreito e profissional
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         ax.axis('off')
         
         # Criação da tabela
@@ -70,37 +56,36 @@ def excel_para_imagem(doc_template, arquivo_excel):
         
         # Iteração pelas células para aplicar formatação específica
         for (row, col), cell in tabela.get_celld().items():
-            # Aplicar Negrito em todo o texto da tabela
+            # Aplicar Negrito em todo o texto
             cell.get_text().set_weight('bold')
             
-            # Formatação da primeira linha (Cabeçalho destacado / Simulação de Mesclagem)
+            # Formatação da primeira linha (Cabeçalho destacado)
             if row == 0:
-                cell.set_facecolor('#D3D3D3')  # Cinza claro de destaque
-                # Se for a segunda coluna do cabeçalho, limpa o texto para simular mesclagem
+                cell.set_facecolor('#E0E0E0')  # Cor de destaque (Cinza claro)
+                # Simulação de mesclagem: se for a segunda célula da primeira linha, removemos o texto
                 if col == 1:
                     cell.get_text().set_text('')
-                # Alinhamento centralizado para o título do cabeçalho na primeira coluna
+                # Centralizamos o texto da primeira célula como título do intervalo
                 if col == 0:
-                    cell.get_text().set_position((0.5, 0.5))
+                    cell.get_text().set_position((0.5, 0.5)) # Tenta centralizar visualmente
             
-            # Bordas pretas nítidas
+            # Bordas da tabela
             cell.set_edgecolor('#000000')
             cell.set_linewidth(1)
 
-        # Salvar em buffer de memória com alta resolução para o PDF
+        # Salvar em buffer de memória com alta resolução
         img_buf = io.BytesIO()
         plt.savefig(img_buf, format='png', bbox_inches='tight', dpi=200, transparent=False)
         plt.close(fig)
         img_buf.seek(0)
         
-        # Retorna a imagem com largura reduzida (120mm) para não estourar o layout do Word
-        return [InlineImage(doc_template, img_buf, width=Mm(120))]
+        return [InlineImage(doc_template, img_buf, width=LARGURA_OTIMIZADA)]
     except Exception as e:
         st.error(f"Erro no processamento da tabela Excel: {e}")
         return []
 
 def processar_anexo(doc_template, arquivo, marcador=None):
-    """Detecta o tipo de arquivo e retorna lista de InlineImages."""
+    """Processa PDFs, Imagens e Excel de forma específica por marcador."""
     if not arquivo:
         return []
     
@@ -108,7 +93,7 @@ def processar_anexo(doc_template, arquivo, marcador=None):
     try:
         extensao = arquivo.name.lower()
         
-        # Lógica para o campo específico de Tabela de Transferência (Suporta Excel)
+        # Regra específica para a Tabela de Transferência vinda do Excel
         if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
             return excel_para_imagem(doc_template, arquivo)
 
@@ -128,7 +113,7 @@ def processar_anexo(doc_template, arquivo, marcador=None):
         return []
 
 def gerar_pdf(docx_path, output_dir):
-    """Conversão via LibreOffice Headless."""
+    """Conversão DOCX para PDF via LibreOffice."""
     try:
         subprocess.run(
             ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
@@ -137,14 +122,13 @@ def gerar_pdf(docx_path, output_dir):
         pdf_path = os.path.join(output_dir, os.path.basename(docx_path).replace('.docx', '.pdf'))
         return pdf_path
     except Exception as e:
-        st.error(f"Erro na conversão PDF: {e}")
+        st.error(f"Erro na conversão para PDF: {e}")
         return None
 
-# --- INTERFACE (UI) ---
-st.title("Automação de Relatório de Prestação - UPA Nova Cidade")
-st.caption("Versão 0.4.1")
+# --- INTERFACE (UI LIMPA - SEM ÍCONES/EMOJIS) ---
+st.title("Automacao de Relatorio de Prestacao - UPA Nova Cidade")
+st.caption("Versao 0.4.3")
 
-# Estrutura de campos de texto
 campos_texto_col1 = [
     "SISTEMA_MES_REFERENCIA", "ANALISTA_TOTAL_ATENDIMENTOS", "ANALISTA_MEDICO_CLINICO",
     "ANALISTA_MEDICO_PEDIATRA", "ANALISTA_ODONTO_CLINICO"
@@ -158,21 +142,21 @@ campos_upload = {
     "EXCEL_META_ATENDIMENTOS": "Grade de Metas",
     "IMAGEM_PRINT_ATENDIMENTO": "Prints Atendimento",
     "IMAGEM_DOCUMENTO_RAIO_X": "Doc. Raio-X",
-    "TABELA_TRANSFERENCIA": "Tabela Transferência",
-    "GRAFICO_TRANSFERENCIA": "Gráfico Transferência",
-    "TABELA_TOTAL_OBITO": "Tabela Total Óbito",
-    "TABELA_OBITO": "Tabela Óbito",
+    "TABELA_TRANSFERENCIA": "Tabela Transferencia (Excel - Aba TRANSFERENCIAS)",
+    "GRAFICO_TRANSFERENCIA": "Grafico Transferencia",
+    "TABELA_TOTAL_OBITO": "Tabela Total Obito",
+    "TABELA_OBITO": "Tabela Obito",
     "TABELA_CCIH": "Tabela CCIH",
     "IMAGEM_NEP": "Imagens NEP",
     "IMAGEM_TREINAMENTO_INTERNO": "Treinamento Interno",
     "IMAGEM_MELHORIAS": "Imagens de Melhorias",
-    "GRAFICO_OUVIDORIA": "Gráfico Ouvidoria",
-    "PDF_OUVIDORIA_INTERNA": "Relatório Ouvidoria (PDF)",
+    "GRAFICO_OUVIDORIA": "Grafico Ouvidoria",
+    "PDF_OUVIDORIA_INTERNA": "Relatorio Ouvidoria (PDF)",
     "TABELA_QUALITATIVA_IMG": "Tabela Qualitativa",
-    "PRINT_CLASSIFICACAO": "Classificação de Risco"
+    "PRINT_CLASSIFICACAO": "Classificacao de Risco"
 }
 
-with st.form("form_v4_1"):
+with st.form("form_v4_2"):
     tab1, tab2 = st.tabs(["Dados Manuais", "Arquivos"])
     contexto = {}
     
@@ -184,59 +168,61 @@ with st.form("form_v4_1"):
             contexto[campo] = c2.text_input(campo.replace("_", " "))
         
         st.write("---")
-        st.subheader("Indicadores de Transferência")
+        st.subheader("Indicadores de Transferencia")
         c3, c4 = st.columns(2)
-        contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências (Inteiro)", step=1, value=0)
-        contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", value="0,00%")
+        contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferencias (Inteiro)", step=1, value=0)
+        contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferencia (Ex: 0,76%)", value="0,00%")
 
     with tab2:
         uploads = {}
         c_up1, c_up2 = st.columns(2)
         for i, (marcador, label) in enumerate(campos_upload.items()):
             col = c_up1 if i % 2 == 0 else c_up2
-            # Suporte a Excel especificamente para a Tabela de Transferência
-            tipos = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if marcador == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
-            uploads[marcador] = col.file_uploader(label, type=tipos, key=marcador)
+            formatos = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if marcador == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
+            uploads[marcador] = col.file_uploader(label, type=formatos, key=marcador)
 
-    btn_gerar = st.form_submit_button("GERAR RELATÓRIO PDF FINAL")
+    btn_gerar = st.form_submit_button("GERAR RELATORIO PDF FINAL")
 
 if btn_gerar:
     if not contexto["SISTEMA_MES_REFERENCIA"]:
-        st.error("O campo 'Mês de Referência' é obrigatório.")
+        st.error("O campo Mês de Referência é obrigatório.")
     else:
         try:
-            # Cálculo Automático: Soma de Médicos
+            # Cálculo Automático de Médicos
             try:
                 m_clinico = int(contexto.get("ANALISTA_MEDICO_CLINICO", 0) or 0)
                 m_pediatra = int(contexto.get("ANALISTA_MEDICO_PEDIATRA", 0) or 0)
                 contexto["SISTEMA_TOTAL_MEDICOS"] = m_clinico + m_pediatra
-            except Exception:
-                contexto["SISTEMA_TOTAL_MEDICOS"] = "Erro no cálculo"
+            except:
+                contexto["SISTEMA_TOTAL_MEDICOS"] = "Erro no calculo"
 
-            # Processamento do Documento
             with tempfile.TemporaryDirectory() as pasta_temp:
                 docx_temp = os.path.join(pasta_temp, "relatorio_final.docx")
                 doc = DocxTemplate("template.docx")
 
-                with st.spinner("Processando anexos e cálculos..."):
+                with st.spinner("Processando anexos e extraindo dados..."):
                     for marcador, arquivo in uploads.items():
+                        # Passa o marcador para tratamento específico do Excel
                         contexto[marcador] = processar_anexo(doc, arquivo, marcador)
 
-                # Renderiza o Word com o dicionário de contexto completo
+                # Mapeamento para garantir compatibilidade com tags acentuadas no Word
+                if "PRINT_CLASSIFICACAO" in contexto:
+                    contexto["PRINT_CLASSIFICAÇÃO"] = contexto["PRINT_CLASSIFICACAO"]
+
                 doc.render(contexto)
                 doc.save(docx_temp)
                 
-                with st.spinner("A converter para PDF..."):
+                with st.spinner("Convertendo para PDF..."):
                     pdf_final = gerar_pdf(docx_temp, pasta_temp)
                     
                     if pdf_final and os.path.exists(pdf_final):
                         with open(pdf_final, "rb") as f:
                             pdf_bytes = f.read()
-                            st.success("Relatório gerado com sucesso.")
+                            st.success("✅ Relatorio gerado com sucesso.")
                             
                             nome_arquivo = f"Relatorio_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
                             st.download_button(
-                                label="Baixar Relatório PDF",
+                                label="Baixar Relatorio PDF",
                                 data=pdf_bytes,
                                 file_name=nome_arquivo,
                                 mime="application/pdf"
@@ -246,7 +232,10 @@ if btn_gerar:
 
         except Exception as e:
             st.error(f"Erro Crítico no Sistema: {e}")
-            
-# --- RODAPÉ ---
+
 st.markdown("---")
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
+
+
+
+
