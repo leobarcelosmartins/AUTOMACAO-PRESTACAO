@@ -22,39 +22,45 @@ def excel_para_imagem(doc_template, arquivo_excel):
     """
     try:
         # Leitura do intervalo D3:E16
+        # Usamos usecols=[3, 4] que corresponde às colunas D e E
         df = pd.read_excel(
             arquivo_excel, 
             sheet_name="TRANSFERENCIAS", 
-            usecols="D:E", 
+            usecols=[3, 4], 
             skiprows=2, 
             nrows=14, 
             header=None
         )
         
-        # Substitui valores nulos por vazio e formata a segunda coluna (índice 1)
+        # Substitui valores nulos por vazio
         df = df.fillna('')
         
+        # Garantir acesso seguro às colunas independentemente do nome atribuído pelo Pandas
+        col_labels = df.columns
+        
         def format_inteiro(val):
-            if val == '': return ''
+            if val == '' or val is None: return ''
             try:
                 # Converte para float e depois int para remover decimais (.0)
                 return str(int(float(val)))
             except (ValueError, TypeError):
                 return str(val)
         
-        df[1] = df[1].apply(format_inteiro)
+        # Formata a segunda coluna (índice 1 do DataFrame resultante)
+        if len(col_labels) > 1:
+            df[col_labels[1]] = df[col_labels[1]].apply(format_inteiro)
         
         # Configuração da figura para renderização
-        # Ajustamos o figsize para ser mais estreito
+        # Ajustamos o figsize para ser mais estreito e profissional
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.axis('off')
         
-        # Criação da tabela com larguras de coluna reduzidas
+        # Criação da tabela
         tabela = ax.table(
             cellText=df.values, 
             loc='center', 
             cellLoc='center',
-            colWidths=[0.35, 0.35]
+            colWidths=[0.45, 0.45]
         )
         
         # Estilização técnica da tabela
@@ -64,28 +70,30 @@ def excel_para_imagem(doc_template, arquivo_excel):
         
         # Iteração pelas células para aplicar formatação específica
         for (row, col), cell in tabela.get_celld().items():
-            # Aplicar Negrito em todo o texto
+            # Aplicar Negrito em todo o texto da tabela
             cell.get_text().set_weight('bold')
             
-            # Formatação da primeira linha (Cabeçalho destacado)
+            # Formatação da primeira linha (Cabeçalho destacado / Simulação de Mesclagem)
             if row == 0:
-                cell.set_facecolor('#E0E0E0')  # Cor de destaque (Cinza claro)
+                cell.set_facecolor('#D3D3D3')  # Cinza claro de destaque
+                # Se for a segunda coluna do cabeçalho, limpa o texto para simular mesclagem
                 if col == 1:
                     cell.get_text().set_text('')
+                # Alinhamento centralizado para o título do cabeçalho na primeira coluna
                 if col == 0:
                     cell.get_text().set_position((0.5, 0.5))
             
-            # Bordas da tabela
+            # Bordas pretas nítidas
             cell.set_edgecolor('#000000')
             cell.set_linewidth(1)
 
-        # Salvar em buffer de memória
+        # Salvar em buffer de memória com alta resolução para o PDF
         img_buf = io.BytesIO()
         plt.savefig(img_buf, format='png', bbox_inches='tight', dpi=200, transparent=False)
         plt.close(fig)
         img_buf.seek(0)
         
-        # Retorna a imagem com uma largura menor (120mm) no documento Word
+        # Retorna a imagem com largura reduzida (120mm) para não estourar o layout do Word
         return [InlineImage(doc_template, img_buf, width=Mm(120))]
     except Exception as e:
         st.error(f"Erro no processamento da tabela Excel: {e}")
@@ -100,7 +108,7 @@ def processar_anexo(doc_template, arquivo, marcador=None):
     try:
         extensao = arquivo.name.lower()
         
-        # Lógica para o campo específico de Tabela de Transferência
+        # Lógica para o campo específico de Tabela de Transferência (Suporta Excel)
         if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
             return excel_para_imagem(doc_template, arquivo)
 
