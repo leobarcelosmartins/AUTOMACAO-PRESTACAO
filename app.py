@@ -30,7 +30,7 @@ def excel_para_imagem(doc_template, arquivo_excel):
             sheet_name="TRANSFERENCIAS", 
             usecols="D:E", 
             skiprows=2, 
-            nrows=14, 
+            nrows=8, 
             header=None
         )
         
@@ -235,6 +235,7 @@ if btn_gerar:
 
 st.markdown("---")
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
+
 
 
 
