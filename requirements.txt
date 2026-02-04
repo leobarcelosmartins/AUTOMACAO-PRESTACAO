@@ -6,3 +6,4 @@ Pillow
 pandas
 openpyxl
 matplotlib
+st_paste_button
