@@ -15,7 +15,7 @@ st.set_page_config(page_title="Gerador de Relatórios V0.4.1", layout="wide")
 
 # Largura de 165mm para garantir o preenchimento da página nas imagens padrão
 LARGURA_OTIMIZADA = Mm(165)
-# Largura reduzida para a tabela Excel conforme solicitado para melhor ajuste abaixo dos títulos
+# Largura reduzida para a tabela Excel para melhor ajuste abaixo dos títulos
 LARGURA_TABELA = Mm(120)
 
 def excel_para_imagem(doc_template, arquivo_excel):
@@ -52,7 +52,6 @@ def excel_para_imagem(doc_template, arquivo_excel):
             df[col_labels[1]] = df[col_labels[1]].apply(format_inteiro)
         
         # Configuração da figura para renderização
-        # Layout profissional para a tabela
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.axis('off')
         
@@ -157,7 +156,7 @@ def gerar_pdf(docx_path, output_dir):
 st.title("Automação de Relatório de Prestação - UPA Nova Cidade")
 st.caption("Versão 0.4.1")
 
-# Estrutura de organização dos campos de texto em duas colunas
+# Estrutura de organização dos campos de texto
 campos_texto_col1 = [
     "SISTEMA_MES_REFERENCIA", "ANALISTA_TOTAL_ATENDIMENTOS", "ANALISTA_MEDICO_CLINICO",
     "ANALISTA_MEDICO_PEDIATRA", "ANALISTA_ODONTO_CLINICO"
@@ -186,7 +185,7 @@ campos_upload = {
     "PRINT_CLASSIFICACAO": "Classificação de Risco"
 }
 
-# Inicialização do estado para persistir as imagens coladas durante a sessão
+# Inicialização do estado para persistir as imagens coladas
 if 'pasted_images' not in st.session_state:
     st.session_state.pasted_images = {}
 
@@ -214,7 +213,7 @@ with st.form("form_v4_1"):
             col = c_up1 if i % 2 == 0 else c_up2
             with col:
                 st.write(f"**{label}**")
-                # Componente para colar imagem diretamente do clipboard
+                # Botão para colar imagem do clipboard
                 pasted_img = paste_image_button(
                     label=f"Colar print para {label}",
                     key=f"paste_{marcador}"
@@ -223,7 +222,7 @@ with st.form("form_v4_1"):
                     st.session_state.pasted_images[marcador] = pasted_img.image_data
                     st.info("Imagem capturada do clipboard.")
 
-                # Upload de ficheiro tradicional como fallback ou alternativa
+                # Upload de ficheiro tradicional
                 tipos = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if marcador == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
                 uploads[marcador] = st.file_uploader(
                     "Ou escolha um ficheiro", 
@@ -239,31 +238,28 @@ if btn_gerar:
         st.error("O campo 'Mês de Referência' é obrigatório.")
     else:
         try:
-            # Cálculo Automático: Soma da força de trabalho médica
+            # Cálculo Automático: Soma de Médicos
             try:
-                # Tratamento de segurança para inputs vazios
                 m_clinico = int(contexto.get("ANALISTA_MEDICO_CLINICO") or 0)
                 m_pediatra = int(contexto.get("ANALISTA_MEDICO_PEDIATRA") or 0)
                 contexto["SISTEMA_TOTAL_MEDICOS"] = m_clinico + m_pediatra
             except Exception:
                 contexto["SISTEMA_TOTAL_MEDICOS"] = "Erro no cálculo"
 
-            # Processamento em diretório temporário para segurança do servidor
             with tempfile.TemporaryDirectory() as pasta_temp:
                 docx_temp = os.path.join(pasta_temp, "relatorio_final.docx")
                 doc = DocxTemplate("template.docx")
 
                 with st.spinner("Processando anexos e efetuando cálculos..."):
                     for marcador in campos_upload.keys():
-                        # Lógica de prioridade: Ficheiro carregado > Imagem colada
+                        # Prioridade: Ficheiro carregado > Imagem colada
                         conteudo = uploads.get(marcador) or st.session_state.pasted_images.get(marcador)
                         contexto[marcador] = processar_conteudo(doc, conteudo, marcador)
 
-                # Renderiza o template Word injetando os dados e imagens
                 doc.render(contexto)
                 doc.save(docx_temp)
                 
-                with st.spinner("Convertendo documento para PDF..."):
+                with st.spinner("Convertendo para PDF..."):
                     pdf_final = gerar_pdf(docx_temp, pasta_temp)
                     
                     if pdf_final and os.path.exists(pdf_final):
@@ -279,7 +275,7 @@ if btn_gerar:
                                 mime="application/pdf"
                             )
                     else:
-                        st.error("A conversão para PDF falhou. Verifique o ambiente do servidor.")
+                        st.error("A conversão para PDF falhou.")
 
         except Exception as e:
             st.error(f"Erro Crítico no Sistema: {e}")
