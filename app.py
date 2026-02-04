@@ -163,6 +163,7 @@ with st.form("form_v4_2"):
         for f in col_t1: ctx[f] = c1.text_input(f.replace("_", " "))
         for f in col_t2: ctx[f] = c2.text_input(f.replace("_", " "))
         st.write("---")
+        st.subheader("Indicadores de Transferência")
         c3, c4 = st.columns(2)
         ctx["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências", step=1, value=0)
         ctx["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", value="0,00%")
@@ -177,6 +178,10 @@ with st.form("form_v4_2"):
                 pasted = paste_image_button(label=f"Colar print", key=f"p_{m}")
                 if pasted:
                     st.session_state.pasted_files[m] = pasted.image_data
+                
+                # Mensagem de confirmação de recebimento do print
+                if m in st.session_state.pasted_files:
+                    st.info("Print recebido.")
                 
                 tipos = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if m == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
                 uploads[m] = st.file_uploader("Ou ficheiro", type=tipos, key=f"f_{m}", label_visibility="collapsed")
@@ -196,17 +201,22 @@ if btn:
                 docx_p = os.path.join(tmp, "temp.docx")
                 doc = DocxTemplate("template.docx")
 
-                for m in marcadores.keys():
-                    raw = uploads.get(m) or st.session_state.pasted_files.get(m)
-                    ctx[m] = processar_conteudo(doc, raw, m)
+                with st.spinner("Processando dados e arquivos..."):
+                    for m in marcadores.keys():
+                        raw = uploads.get(m) or st.session_state.pasted_files.get(m)
+                        ctx[m] = processar_conteudo(doc, raw, m)
 
                 doc.render(ctx)
                 doc.save(docx_p)
                 
-                pdf_p = gerar_pdf(docx_p, tmp)
-                if pdf_p:
-                    with open(pdf_p, "rb") as f:
-                        st.download_button("Baixar PDF", f.read(), f"Relatorio_{ctx['SISTEMA_MES_REFERENCIA']}.pdf", "application/pdf")
+                with st.spinner("Convertendo para PDF..."):
+                    pdf_p = gerar_pdf(docx_p, tmp)
+                    if pdf_p:
+                        with open(pdf_p, "rb") as f:
+                            st.download_button("Baixar PDF", f.read(), f"Relatorio_{ctx['SISTEMA_MES_REFERENCIA']}.pdf", "application/pdf")
+                            st.success("Relatório gerado com sucesso.")
+                    else:
+                        st.error("Erro na conversão para PDF.")
         except Exception as e:
             st.error(f"Erro: {e}")
 
