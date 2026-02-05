@@ -13,48 +13,6 @@ from streamlit_paste_button import paste_image_button
 # --- CONFIGURAÇÕES DE LAYOUT ---
 st.set_page_config(page_title="Gerador de Relatórios V0.4.3", layout="wide")
 
-# --- CUSTOM CSS PARA DESIGN DE DASHBOARD ---
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #ffffff;
-        border-radius: 10px 10px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #e9ecef;
-        font-weight: bold;
-    }
-    /* Estilo para os Cards/Blocos */
-    .dashboard-card {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        margin-bottom: 20px;
-        border: 1px solid #e9ecef;
-    }
-    .card-title {
-        color: #1f77b4;
-        font-size: 1.2rem;
-        font-weight: bold;
-        margin-bottom: 15px;
-        border-bottom: 2px solid #f0f2f6;
-        padding-bottom: 5px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 # --- DICIONÁRIO DE DIMENSÕES POR CAMPO ---
 DIMENSOES_CAMPOS = {
     "EXCEL_META_ATENDIMENTOS": 165, "IMAGEM_PRINT_ATENDIMENTO": 160,
@@ -279,3 +237,4 @@ if st.button("🚀 FINALIZAR E GERAR RELATÓRIO PDF", use_container_width=True):
             st.error(f"Erro Crítico: {e}")
 
 st.caption("Desenvolvido por Leonardo Barcelos Martins | Backup Tático")
+
