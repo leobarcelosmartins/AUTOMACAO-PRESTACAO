@@ -33,6 +33,7 @@ DIMENSOES_CAMPOS = {
 }
 
 # --- INICIALIZAÇÃO DO ESTADO ---
+# Mantém a lista de múltiplos arquivos/prints por marcador
 if 'lista_arquivos' not in st.session_state:
     st.session_state.lista_arquivos = {m: [] for m in [
         "EXCEL_META_ATENDIMENTOS", "IMAGEM_PRINT_ATENDIMENTO", "IMAGEM_DOCUMENTO_RAIO_X",
@@ -173,16 +174,16 @@ with tab_arquivos:
         with col_alvo:
             st.markdown(f"#### {label}")
             
+            # Correção do Erro de Atributo: pasted é o próprio objeto PIL Image
             pasted = paste_image_button(label=f"Colar print", key=f"p_{m}")
             if pasted:
                 nome_p = f"Captura_{len(st.session_state.lista_arquivos[m]) + 1}"
-                # Guardamos os bytes para evitar erro de tipo no st.image
                 img_buffer = io.BytesIO()
-                pasted.image_data.save(img_buffer, format="PNG")
+                pasted.save(img_buffer, format="PNG") # Correção aplicada aqui
                 st.session_state.lista_arquivos[m].append({
                     "name": nome_p, 
-                    "content": pasted.image_data, 
-                    "display": img_buffer.getvalue(), # Versão em bytes para preview seguro
+                    "content": pasted, 
+                    "display": img_buffer.getvalue(),
                     "type": "pasted"
                 })
                 st.toast(f"Print recebido para {label}")
@@ -201,16 +202,16 @@ with tab_arquivos:
                         })
 
             if st.session_state.lista_arquivos[m]:
-                st.info(f"Arquivos/Prints recebidos ({len(st.session_state.lista_arquivos[m])})")
+                # Mensagem de confirmação de recebimento (conforme solicitado)
+                st.info(f"Arquivos/Prints recebidos: {len(st.session_state.lista_arquivos[m])}")
                 for idx, item in enumerate(st.session_state.lista_arquivos[m]):
                     with st.expander(f"📄 {item['name']}"):
-                        # Preview seguro
                         if item['type'] == "pasted":
                             st.image(item['display'], caption="Visualização do Print", width=300)
                         elif not item['name'].lower().endswith(('.pdf', '.xlsx', '.xls')):
                             st.image(item['display'], caption=item['name'], width=300)
                         else:
-                            st.info("Visualização não disponível (PDF/Excel)")
+                            st.info("Preview indisponível (PDF/Excel)")
                         
                         if st.button("Remover", key=f"del_{m}_{idx}"):
                             st.session_state.lista_arquivos[m].pop(idx)
@@ -220,9 +221,10 @@ with tab_arquivos:
 # --- BOTÃO FINAL ---
 if st.button("🚀 GERAR RELATÓRIO PDF FINAL", use_container_width=True):
     if not contexto_manual.get("SISTEMA_MES_REFERENCIA"):
-        st.error("O campo 'Mês de Referência' é obrigatório.")
+        st.error("Mês de Referência é obrigatório.")
     else:
         try:
+            # Cálculo de Médicos
             try:
                 mc = int(contexto_manual.get("ANALISTA_MEDICO_CLINICO") or 0)
                 mp = int(contexto_manual.get("ANALISTA_MEDICO_PEDIATRA") or 0)
@@ -249,10 +251,11 @@ if st.button("🚀 GERAR RELATÓRIO PDF FINAL", use_container_width=True):
                 pdf_res = gerar_pdf(docx_out, tmp_dir)
                 if pdf_res:
                     with open(pdf_res, "rb") as f:
+                        # Mensagem de sucesso (conforme solicitado)
                         st.success("Relatório gerado com sucesso.")
                         st.download_button("📥 Baixar Relatório PDF", f.read(), f"Relatorio_{contexto_manual['SISTEMA_MES_REFERENCIA']}.pdf", "application/pdf")
                 else:
-                    st.error("Falha na conversão para PDF.")
+                    st.error("Falha na conversão para PDF via LibreOffice.")
         except Exception as e:
             st.error(f"Erro Crítico: {e}")
 
