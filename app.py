@@ -33,7 +33,6 @@ DIMENSOES_CAMPOS = {
 }
 
 # --- INICIALIZAÇÃO DO ESTADO ---
-# Usamos o session_state para manter a lista de arquivos de cada marcador
 if 'lista_arquivos' not in st.session_state:
     st.session_state.lista_arquivos = {m: [] for m in [
         "EXCEL_META_ATENDIMENTOS", "IMAGEM_PRINT_ATENDIMENTO", "IMAGEM_DOCUMENTO_RAIO_X",
@@ -95,7 +94,7 @@ def processar_item(doc_template, item, marcador):
             img_byte_arr.seek(0)
             return [InlineImage(doc_template, img_byte_arr, width=Mm(largura_mm))]
 
-        # Se for Excel (apenas para o marcador específico)
+        # Se for Excel
         extensao = getattr(item, 'name', '').lower()
         if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
             resultado = excel_para_imagem(doc_template, item)
@@ -164,8 +163,6 @@ with tab_manual:
         contexto_manual["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências", step=1, value=0)
         contexto_manual["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", value="0,00%")
         submit_manual = st.form_submit_button("Salvar Dados de Texto")
-        if submit_manual:
-            st.success("Dados de texto salvos temporariamente.")
 
 with tab_arquivos:
     st.write("Anexe arquivos ou cole prints para cada campo abaixo.")
@@ -176,50 +173,56 @@ with tab_arquivos:
         with col_alvo:
             st.markdown(f"#### {label}")
             
-            # 1. Botão de Colar
             pasted = paste_image_button(label=f"Colar print", key=f"p_{m}")
             if pasted:
                 nome_p = f"Captura_{len(st.session_state.lista_arquivos[m]) + 1}"
-                st.session_state.lista_arquivos[m].append({"name": nome_p, "content": pasted.image_data, "type": "pasted"})
+                # Guardamos os bytes para evitar erro de tipo no st.image
+                img_buffer = io.BytesIO()
+                pasted.image_data.save(img_buffer, format="PNG")
+                st.session_state.lista_arquivos[m].append({
+                    "name": nome_p, 
+                    "content": pasted.image_data, 
+                    "display": img_buffer.getvalue(), # Versão em bytes para preview seguro
+                    "type": "pasted"
+                })
                 st.toast(f"Print recebido para {label}")
 
-            # 2. Uploader de Ficheiro (Multi-seleção)
             tipo_f = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if m == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
             files = st.file_uploader("Adicionar arquivos", type=tipo_f, key=f"f_{m}", accept_multiple_files=True, label_visibility="collapsed")
             
             if files:
                 for f in files:
-                    # Evita duplicidade simples pelo nome
                     if f.name not in [x["name"] for x in st.session_state.lista_arquivos[m]]:
-                        st.session_state.lista_arquivos[m].append({"name": f.name, "content": f, "type": "uploaded"})
+                        st.session_state.lista_arquivos[m].append({
+                            "name": f.name, 
+                            "content": f, 
+                            "display": f, 
+                            "type": "uploaded"
+                        })
 
-            # 3. Lista de arquivos enviados com Preview e Delete
             if st.session_state.lista_arquivos[m]:
-                st.write("Arquivos enviados:")
+                st.info(f"Arquivos/Prints recebidos ({len(st.session_state.lista_arquivos[m])})")
                 for idx, item in enumerate(st.session_state.lista_arquivos[m]):
                     with st.expander(f"📄 {item['name']}"):
-                        # Preview
+                        # Preview seguro
                         if item['type'] == "pasted":
-                            st.image(item['content'], caption="Visualização do Print", width=300)
+                            st.image(item['display'], caption="Visualização do Print", width=300)
                         elif not item['name'].lower().endswith(('.pdf', '.xlsx', '.xls')):
-                            st.image(item['content'], caption=item['name'], width=300)
+                            st.image(item['display'], caption=item['name'], width=300)
                         else:
-                            st.info("Visualização prévia não disponível para este formato.")
+                            st.info("Visualização não disponível (PDF/Excel)")
                         
-                        # Botão Excluir
-                        if st.button("Remover arquivo", key=f"del_{m}_{idx}"):
+                        if st.button("Remover", key=f"del_{m}_{idx}"):
                             st.session_state.lista_arquivos[m].pop(idx)
                             st.rerun()
             st.write("---")
 
-# --- BOTÃO FINAL DE GERAÇÃO ---
-st.write("")
+# --- BOTÃO FINAL ---
 if st.button("🚀 GERAR RELATÓRIO PDF FINAL", use_container_width=True):
     if not contexto_manual.get("SISTEMA_MES_REFERENCIA"):
         st.error("O campo 'Mês de Referência' é obrigatório.")
     else:
         try:
-            # Cálculos Médicos
             try:
                 mc = int(contexto_manual.get("ANALISTA_MEDICO_CLINICO") or 0)
                 mp = int(contexto_manual.get("ANALISTA_MEDICO_PEDIATRA") or 0)
@@ -231,31 +234,25 @@ if st.button("🚀 GERAR RELATÓRIO PDF FINAL", use_container_width=True):
                 docx_out = os.path.join(tmp_dir, "temp_relatorio.docx")
                 doc_tpl = DocxTemplate("template.docx")
 
-                # Consolidação de Conteúdo (Injeção no Word)
-                with st.spinner("Consolidando evidências e gerando documento..."):
-                    # Unimos os dados manuais com as listas de imagens processadas
+                with st.spinner("Consolidando evidências..."):
                     dados_finais = contexto_manual.copy()
                     for m in marcadores_evidencia.keys():
-                        lista_imgs_processadas = []
+                        lista_imgs = []
                         for item in st.session_state.lista_arquivos[m]:
-                            # Cada processar_item retorna uma LISTA (porque PDFs podem ter várias páginas)
-                            resultado = processar_item(doc_tpl, item['content'], m)
-                            if resultado:
-                                lista_imgs_processadas.extend(resultado)
-                        dados_finais[m] = lista_imgs_processadas
+                            res = processar_item(doc_tpl, item['content'], m)
+                            if res: lista_imgs.extend(res)
+                        dados_finais[m] = lista_imgs
 
                 doc_tpl.render(dados_finais)
                 doc_tpl.save(docx_out)
                 
-                with st.spinner("Convertendo para formato PDF..."):
-                    pdf_res = gerar_pdf(docx_out, tmp_dir)
-                    if pdf_res:
-                        with open(pdf_res, "rb") as f:
-                            pdf_bytes = f.read()
-                            st.success("Relatório gerado com sucesso.")
-                            st.download_button("📥 Baixar Relatório PDF", pdf_bytes, f"Relatorio_{contexto_manual['SISTEMA_MES_REFERENCIA']}.pdf", "application/pdf")
-                    else:
-                        st.error("Falha na conversão para PDF via LibreOffice.")
+                pdf_res = gerar_pdf(docx_out, tmp_dir)
+                if pdf_res:
+                    with open(pdf_res, "rb") as f:
+                        st.success("Relatório gerado com sucesso.")
+                        st.download_button("📥 Baixar Relatório PDF", f.read(), f"Relatorio_{contexto_manual['SISTEMA_MES_REFERENCIA']}.pdf", "application/pdf")
+                else:
+                    st.error("Falha na conversão para PDF.")
         except Exception as e:
             st.error(f"Erro Crítico: {e}")
 
