@@ -17,7 +17,7 @@ st.set_page_config(page_title="Gerador de Relatórios V0.4.3", layout="wide")
 st.markdown("""
     <style>
     .main {
-        background-color: #f8f9fa;
+        background-color: #f0f2f5;
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
@@ -27,30 +27,44 @@ st.markdown("""
         white-space: pre-wrap;
         background-color: #ffffff;
         border-radius: 10px 10px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
+        padding: 10px 20px;
+        border: 1px solid #e0e0e0;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #e9ecef;
+        background-color: #ffffff;
+        border-bottom: 3px solid #1f77b4;
         font-weight: bold;
     }
-    /* Estilo para os Cards/Blocos */
+    /* Estilo para os Cards do Dashboard */
     .dashboard-card {
         background-color: #ffffff;
         padding: 20px;
         border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-        margin-bottom: 20px;
-        border: 1px solid #e9ecef;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        margin-bottom: 25px;
+        border-left: 5px solid #1f77b4;
     }
     .card-title {
-        color: #1f77b4;
-        font-size: 1.2rem;
+        color: #2c3e50;
+        font-size: 1.3rem;
         font-weight: bold;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+    }
+    /* Estilo para blocos de upload individuais */
+    .upload-block {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px dashed #ced4da;
         margin-bottom: 15px;
-        border-bottom: 2px solid #f0f2f6;
-        padding-bottom: 5px;
+    }
+    .upload-label {
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -199,7 +213,26 @@ with tab_manual:
         st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_arquivos:
-    # Organização das Evidências em Categorias
+    # Configuração de rótulos amigáveis
+    labels_amigaveis = {
+        "EXCEL_META_ATENDIMENTOS": "Grade de Metas", 
+        "IMAGEM_PRINT_ATENDIMENTO": "Prints Atendimento", 
+        "PRINT_CLASSIFICACAO": "Classificação de Risco",
+        "IMAGEM_DOCUMENTO_RAIO_X": "Doc. Raio-X", 
+        "TABELA_TRANSFERENCIA": "Tabela Transferência (Excel)", 
+        "GRAFICO_TRANSFERENCIA": "Gráfico Transferência",
+        "TABELA_TOTAL_OBITO": "Tab. Total Óbito", 
+        "TABELA_OBITO": "Tab. Óbito", 
+        "TABELA_CCIH": "Tabela CCIH", 
+        "TABELA_QUALITATIVA_IMG": "Tab. Qualitativa",
+        "IMAGEM_NEP": "Imagens NEP", 
+        "IMAGEM_TREINAMENTO_INTERNO": "Treinamento Interno", 
+        "IMAGEM_MELHORIAS": "Melhorias",
+        "GRAFICO_OUVIDORIA": "Gráfico Ouvidoria", 
+        "PDF_OUVIDORIA_INTERNA": "Relatório Ouvidoria"
+    }
+
+    # Organização das Evidências em Categorias Visuais
     categorias = {
         "Atendimento e Metas": ["EXCEL_META_ATENDIMENTOS", "IMAGEM_PRINT_ATENDIMENTO", "PRINT_CLASSIFICACAO", "IMAGEM_DOCUMENTO_RAIO_X"],
         "Transferências": ["TABELA_TRANSFERENCIA", "GRAFICO_TRANSFERENCIA"],
@@ -207,45 +240,67 @@ with tab_arquivos:
         "Desenvolvimento e Ouvidoria": ["IMAGEM_NEP", "IMAGEM_TREINAMENTO_INTERNO", "IMAGEM_MELHORIAS", "GRAFICO_OUVIDORIA", "PDF_OUVIDORIA_INTERNA"]
     }
 
-    for cat_name, lista_m in categorias.items():
-        with st.container():
-            st.markdown(f'<div class="dashboard-card"><div class="card-title">{cat_name}</div>', unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            for idx, m in enumerate(lista_m):
-                alvo = col1 if idx % 2 == 0 else col2
-                with alvo:
-                    label = {**{"SISTEMA_MES_REFERENCIA": "Mês"}, **{k: v for k, v in zip(DIMENSOES_CAMPOS.keys(), [
-                        "Grade de Metas", "Prints Atendimento", "Doc. Raio-X", "Tabela Transferência", "Gráfico Transferência",
-                        "Tab. Total Óbito", "Tab. Óbito", "Tabela CCIH", "Imagens NEP", "Treinamento Interno", "Melhorias",
-                        "Gráfico Ouvidoria", "Relatório Ouvidoria", "Tab. Qualitativa", "Classificação"
-                    ])}}[m]
+    # Cores para cada borda de categoria para tornar o design mais "lúdico"
+    cores_categorias = ["#1f77b4", "#2ca02c", "#ff7f0e", "#9467bd"]
+
+    for i_cat, (cat_name, lista_m) in enumerate(categorias.items()):
+        cor = cores_categorias[i_cat % len(cores_categorias)]
+        
+        # Início do Bloco da Categoria
+        st.markdown(f"""
+            <div style="background-color: white; padding: 20px; border-radius: 15px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; border-left: 6px solid {cor};">
+            <h3 style="color: {cor}; margin-top: 0; font-family: sans-serif;">{cat_name}</h3>
+        """, unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        
+        for idx, m in enumerate(lista_m):
+            alvo = col1 if idx % 2 == 0 else col2
+            with alvo:
+                # Container individual para cada campo de upload/print
+                with st.container(border=True):
+                    label = labels_amigaveis.get(m, m)
+                    st.markdown(f"<div class='upload-label'>{label}</div>", unsafe_allow_html=True)
                     
-                    st.write(f"**{label}**")
-                    pasted = paste_image_button(label="Colar print", key=f"p_{m}")
-                    if pasted:
-                        nome_p = f"Captura_{len(st.session_state.arquivos_por_marcador[m]) + 1}"
-                        buf = io.BytesIO()
-                        pasted.save(buf, format="PNG")
-                        st.session_state.arquivos_por_marcador[m].append({"name": nome_p, "content": pasted, "preview": buf.getvalue(), "type": "print"})
-                        st.rerun()
+                    # Botões de ação em colunas para ficarem lado a lado
+                    c_act1, c_act2 = st.columns([1, 1.2])
+                    with c_act1:
+                        pasted = paste_image_button(label="Colar print", key=f"p_{m}")
+                        if pasted:
+                            nome_p = f"Captura_{len(st.session_state.arquivos_por_marcador[m]) + 1}"
+                            buf = io.BytesIO()
+                            pasted.save(buf, format="PNG")
+                            st.session_state.arquivos_por_marcador[m].append({
+                                "name": nome_p, "content": pasted, "preview": buf.getvalue(), "type": "print"
+                            })
+                            st.rerun()
+                    
+                    with c_act2:
+                        tipo_f = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if m == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
+                        f_upload = st.file_uploader("Upload", type=tipo_f, key=f"f_{m}", 
+                                                   accept_multiple_files=True, label_visibility="collapsed")
+                        if f_upload:
+                            for f in f_upload:
+                                if f.name not in [x["name"] for x in st.session_state.arquivos_por_marcador[m]]:
+                                    st.session_state.arquivos_por_marcador[m].append({
+                                        "name": f.name, "content": f, 
+                                        "preview": f if not f.name.lower().endswith(('.pdf', '.xlsx', '.xls')) else None, 
+                                        "type": "file"
+                                    })
+                            st.rerun()
 
-                    tipo_f = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if m == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
-                    f_upload = st.file_uploader("Upload", type=tipo_f, key=f"f_{m}", accept_multiple_files=True, label_visibility="collapsed")
-                    if f_upload:
-                        for f in f_upload:
-                            if f.name not in [x["name"] for x in st.session_state.arquivos_por_marcador[m]]:
-                                st.session_state.arquivos_por_marcador[m].append({"name": f.name, "content": f, "preview": f if not f.name.lower().endswith(('.pdf', '.xlsx', '.xls')) else None, "type": "file"})
-                        st.rerun()
-
-                    # Listagem de itens recebidos
+                    # Listagem estilizada de itens recebidos
                     if st.session_state.arquivos_por_marcador[m]:
+                        st.markdown("<div style='font-size: 0.8rem; color: #666; margin-top: 5px;'>Itens selecionados:</div>", unsafe_allow_html=True)
                         for i_idx, item in enumerate(st.session_state.arquivos_por_marcador[m]):
                             with st.expander(f"📄 {item['name']}"):
-                                if item['preview']: st.image(item['preview'], width=250)
-                                if st.button("Excluir", key=f"del_{m}_{i_idx}"):
+                                if item['preview']: st.image(item['preview'], use_container_width=True)
+                                if st.button("Remover", key=f"del_{m}_{i_idx}", use_container_width=True):
                                     st.session_state.arquivos_por_marcador[m].pop(i_idx)
                                     st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- GERAÇÃO FINAL ---
 st.write("---")
