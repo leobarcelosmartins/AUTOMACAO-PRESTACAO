@@ -12,7 +12,7 @@ from streamlit_paste_button import paste_image_button
 from PIL import Image
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.4.6", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.4.7", layout="wide")
 
 # --- CUSTOM CSS PARA DESIGN DE DASHBOARD E BOTÃO VERDE ---
 st.markdown("""
@@ -119,7 +119,7 @@ def excel_para_imagem(doc_template, arquivo_excel):
         return None
 
 def processar_item(doc_template, item, marcador):
-    """Processa um único item (arquivo ou bytes) e retorna InlineImage ou lista de InlineImages."""
+    """Processa um único item validando se não é nulo antes de qualquer operação."""
     largura_mm = DIMENSOES_CAMPOS.get(marcador, 165)
     try:
         if item is None:
@@ -131,26 +131,34 @@ def processar_item(doc_template, item, marcador):
             if isinstance(item, bytes):
                 buf.write(item)
             else:
-                item.save(buf, format="PNG")
+                # Verificação extra para evitar AttributeError em NoneType dentro da tupla
+                if hasattr(item, 'save'):
+                    item.save(buf, format="PNG")
+                else:
+                    return []
             buf.seek(0)
             return [InlineImage(doc_template, buf, width=Mm(largura_mm))]
         
-        extensao = getattr(item, 'name', '').lower()
-        if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
-            res = excel_para_imagem(doc_template, item)
-            return [res] if res else []
+        # Se for upload de arquivo
+        if hasattr(item, 'name'):
+            extensao = item.name.lower()
+            if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
+                res = excel_para_imagem(doc_template, item)
+                return [res] if res else []
+            
+            if extensao.endswith(".pdf"):
+                pdf_doc = fitz.open(stream=item.read(), filetype="pdf")
+                imgs = []
+                for pg in pdf_doc:
+                    pix = pg.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    buf = io.BytesIO(pix.tobytes())
+                    imgs.append(InlineImage(doc_template, buf, width=Mm(largura_mm)))
+                pdf_doc.close()
+                return imgs
+            
+            return [InlineImage(doc_template, item, width=Mm(largura_mm))]
         
-        if extensao.endswith(".pdf"):
-            pdf_doc = fitz.open(stream=item.read(), filetype="pdf")
-            imgs = []
-            for pg in pdf_doc:
-                pix = pg.get_pixmap(matrix=fitz.Matrix(2, 2))
-                buf = io.BytesIO(pix.tobytes())
-                imgs.append(InlineImage(doc_template, buf, width=Mm(largura_mm)))
-            pdf_doc.close()
-            return imgs
-        
-        return [InlineImage(doc_template, item, width=Mm(largura_mm))]
+        return []
     except Exception as e:
         st.error(f"Erro no marcador {marcador}: {e}")
         return []
@@ -164,7 +172,7 @@ def gerar_pdf(docx_path, output_dir):
 
 # --- UI ---
 st.title("Automação de Relatórios Assistenciais")
-st.caption("Versão 0.4.6 - Correção de Estabilidade (NoneType Fix)")
+st.caption("Versão 0.4.7 - Estabilidade Crítica (Anti-NoneType)")
 
 tab_manual, tab_arquivos = st.tabs(["📝 Dados Manuais", "📁 Gestão de Evidências"])
 ctx_manual = {}
@@ -216,14 +224,13 @@ with tab_arquivos:
                 st.markdown(f"<span class='upload-label'>{labels.get(m, m)}</span>", unsafe_allow_html=True)
                 c_btn1, c_btn2 = st.columns([1, 1.2])
                 with c_btn1:
-                    # O componente retorna um objeto ou None se nada foi colado
                     pasted = paste_image_button(label="Colar print", key=f"p_{m}_{b_idx}")
                     
-                    if pasted:
-                        # Extração segura: verifica o atributo image_data
+                    # Verificação tripla de segurança para evitar o erro NoneType
+                    if pasted is not None:
                         img_obj = getattr(pasted, "image_data", None)
                         
-                        if img_obj is not None:
+                        if img_obj is not None and hasattr(img_obj, 'save'):
                             try:
                                 buf = io.BytesIO()
                                 img_obj.save(buf, format="PNG")
