@@ -12,7 +12,7 @@ from streamlit_paste_button import paste_image_button
 from PIL import Image
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.4.5", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.4.6", layout="wide")
 
 # --- CUSTOM CSS PARA DESIGN DE DASHBOARD E BOTÃO VERDE ---
 st.markdown("""
@@ -112,7 +112,6 @@ def excel_para_imagem(doc_template, arquivo_excel):
         plt.savefig(img_buf, format='png', bbox_inches='tight', dpi=200)
         plt.close(fig)
         img_buf.seek(0)
-        # Largura de 90mm conforme dicionário
         largura_mm = DIMENSOES_CAMPOS.get("TABELA_TRANSFERENCIA", 90)
         return InlineImage(doc_template, img_buf, width=Mm(largura_mm))
     except Exception as e:
@@ -123,6 +122,10 @@ def processar_item(doc_template, item, marcador):
     """Processa um único item (arquivo ou bytes) e retorna InlineImage ou lista de InlineImages."""
     largura_mm = DIMENSOES_CAMPOS.get(marcador, 165)
     try:
+        if item is None:
+            return []
+            
+        # Se for imagem PIL ou bytes de print colado
         if isinstance(item, (Image.Image, bytes)):
             buf = io.BytesIO()
             if isinstance(item, bytes):
@@ -161,7 +164,7 @@ def gerar_pdf(docx_path, output_dir):
 
 # --- UI ---
 st.title("Automação de Relatórios Assistenciais")
-st.caption("Versão 0.4.5 - Dicionário de Dimensões Customizado")
+st.caption("Versão 0.4.6 - Correção de Estabilidade (NoneType Fix)")
 
 tab_manual, tab_arquivos = st.tabs(["📝 Dados Manuais", "📁 Gestão de Evidências"])
 ctx_manual = {}
@@ -213,17 +216,26 @@ with tab_arquivos:
                 st.markdown(f"<span class='upload-label'>{labels.get(m, m)}</span>", unsafe_allow_html=True)
                 c_btn1, c_btn2 = st.columns([1, 1.2])
                 with c_btn1:
+                    # O componente retorna um objeto ou None se nada foi colado
                     pasted = paste_image_button(label="Colar print", key=f"p_{m}_{b_idx}")
-                    if pasted is not None:
-                        imagem_pil = pasted.image_data
-                        buf = io.BytesIO()
-                        imagem_pil.save(buf, format="PNG")
-                        img_bytes = buf.getvalue()
-                        nome_p = f"Captura_{len(st.session_state.arquivos_por_marcador[m]) + 1}.png"
-                        st.session_state.arquivos_por_marcador[m].append({
-                            "name": nome_p, "content": img_bytes, "preview": img_bytes, "type": "print"
-                        })
-                        st.rerun()
+                    
+                    if pasted:
+                        # Extração segura: verifica o atributo image_data
+                        img_obj = getattr(pasted, "image_data", None)
+                        
+                        if img_obj is not None:
+                            try:
+                                buf = io.BytesIO()
+                                img_obj.save(buf, format="PNG")
+                                img_bytes = buf.getvalue()
+                                nome_p = f"Captura_{len(st.session_state.arquivos_por_marcador[m]) + 1}.png"
+                                st.session_state.arquivos_por_marcador[m].append({
+                                    "name": nome_p, "content": img_obj, "preview": img_bytes, "type": "print"
+                                })
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao capturar print: {e}")
+
                 with c_btn2:
                     tipo_f = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if m == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
                     f_up = st.file_uploader("Upload", type=tipo_f, key=f"f_{m}_{b_idx}", accept_multiple_files=True, label_visibility="collapsed")
