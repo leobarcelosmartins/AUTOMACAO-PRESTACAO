@@ -163,11 +163,11 @@ with st.form("form_v4_3"):
                     key=f"paste_{marcador}"
                 )
                 
-                # Lógica de anexo e feedback imediato
-                if pasted:
+                # Lógica de anexo com feedback transitório (Toast)
+                if pasted and pasted.image_data:
                     st.session_state.pasted_images[marcador] = pasted.image_data
-                    # A mensagem aparece apenas quando a ação de colar ocorre
-                    st.success("✅ Imagem capturada do clipboard.")
+                    # O toast aparece no canto e some sozinho, resolvendo o problema da persistência
+                    st.toast(f"✅ Print anexado em: {label}")
                 
                 # Uploader de Ficheiro (Tradicional)
                 uploads[marcador] = st.file_uploader(
@@ -177,9 +177,9 @@ with st.form("form_v4_3"):
                     label_visibility="collapsed"
                 )
                 
-                # Indicador discreto de que o campo já contém um print colado
+                # Indicador visual discreto de estado
                 if marcador in st.session_state.pasted_images and not uploads[marcador]:
-                    st.caption("📎 *Conteúdo capturado via clipboard*")
+                    st.caption("📎 *Imagem capturada do clipboard*")
             st.write("---")
 
     btn_gerar = st.form_submit_button("🚀 GERAR RELATÓRIO PDF FINAL")
@@ -215,6 +215,7 @@ if btn_gerar:
                     
                     if pdf_final and os.path.exists(pdf_final):
                         with open(pdf_final, "rb") as f:
+                            st.success("Relatório gerado com sucesso.")
                             nome_arquivo = f"Relatorio_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
                             st.download_button("📥 Baixar Relatório PDF", f.read(), nome_arquivo, "application/pdf")
                     else:
