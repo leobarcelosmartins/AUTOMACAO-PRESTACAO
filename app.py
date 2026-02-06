@@ -12,9 +12,9 @@ from streamlit_paste_button import paste_image_button
 from PIL import Image
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.4.7", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.4.3", layout="wide")
 
-# --- CUSTOM CSS PARA DESIGN DE DASHBOARD E BOTÃO VERDE ---
+# --- CUSTOM CSS PARA DESIGN DE DASHBOARD ---
 st.markdown("""
     <style>
     .main {
@@ -35,46 +35,19 @@ st.markdown("""
         margin-bottom: 10px;
         display: block;
     }
-    
-    /* ESTILIZAÇÃO DO BOTÃO GERAR (VERDE) */
-    div.stButton > button[kind="primary"] {
-        background-color: #28a745 !important;
-        color: white !important;
-        border: none !important;
-        font-weight: bold !important;
-        padding: 0.6rem 2rem !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    div.stButton > button[kind="primary"]:hover {
-        background-color: #218838 !important;
-        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
-        transform: translateY(-1px) !important;
-    }
-    
-    div.stButton > button[kind="primary"]:active {
-        transform: translateY(1px) !important;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- DICIONÁRIO DE DIMENSÕES POR CAMPO (LARGURAS EM MM) ---
+# --- DICIONÁRIO DE DIMENSÕES ---
 DIMENSOES_CAMPOS = {
-    "EXCEL_META_ATENDIMENTOS": 165,
-    "IMAGEM_PRINT_ATENDIMENTO": 165,
-    "IMAGEM_DOCUMENTO_RAIO_X": 165,
-    "TABELA_TRANSFERENCIA": 90,
-    "GRAFICO_TRANSFERENCIA": 160,
-    "TABELA_TOTAL_OBITO": 165,
-    "TABELA_OBITO": 180,
-    "TABELA_CCIH": 180,
-    "IMAGEM_NEP": 180,
-    "IMAGEM_TREINAMENTO_INTERNO": 180,
-    "IMAGEM_MELHORIAS": 180,
-    "GRAFICO_OUVIDORIA": 155,
-    "PDF_OUVIDORIA_INTERNA": 165,
-    "TABELA_QUALITATIVA_IMG": 170,
-    "PRINT_CLASSIFICACAO": 160
+    "EXCEL_META_ATENDIMENTOS": 165, "IMAGEM_PRINT_ATENDIMENTO": 160,
+    "PRINT_CLASSIFICACAO": 155, "IMAGEM_DOCUMENTO_RAIO_X": 150, 
+    "TABELA_TRANSFERENCIA": 120, "GRAFICO_TRANSFERENCIA": 155,
+    "TABELA_TOTAL_OBITO": 150, "TABELA_OBITO": 150, 
+    "TABELA_CCIH": 150, "TABELA_QUALITATIVA_IMG": 155,
+    "IMAGEM_NEP": 165, "IMAGEM_TREINAMENTO_INTERNO": 165, 
+    "IMAGEM_MELHORIAS": 165, "GRAFICO_OUVIDORIA": 155, 
+    "PDF_OUVIDORIA_INTERNA": 165
 }
 
 # --- INICIALIZAÇÃO DO ESTADO ---
@@ -82,7 +55,6 @@ if 'arquivos_por_marcador' not in st.session_state:
     st.session_state.arquivos_por_marcador = {m: [] for m in DIMENSOES_CAMPOS.keys()}
 
 def excel_para_imagem(doc_template, arquivo_excel):
-    """Converte o intervalo D3:E16 da aba TRANSFERENCIAS em imagem para o Word."""
     try:
         df = pd.read_excel(arquivo_excel, sheet_name="TRANSFERENCIAS", usecols=[3, 4], skiprows=2, nrows=14, header=None)
         df = df.fillna('')
@@ -112,53 +84,40 @@ def excel_para_imagem(doc_template, arquivo_excel):
         plt.savefig(img_buf, format='png', bbox_inches='tight', dpi=200)
         plt.close(fig)
         img_buf.seek(0)
-        largura_mm = DIMENSOES_CAMPOS.get("TABELA_TRANSFERENCIA", 90)
-        return InlineImage(doc_template, img_buf, width=Mm(largura_mm))
+        return InlineImage(doc_template, img_buf, width=Mm(DIMENSOES_CAMPOS["TABELA_TRANSFERENCIA"]))
     except Exception as e:
         st.error(f"Erro Excel: {e}")
         return None
 
 def processar_item(doc_template, item, marcador):
-    """Processa um único item validando se não é nulo antes de qualquer operação."""
     largura_mm = DIMENSOES_CAMPOS.get(marcador, 165)
     try:
-        if item is None:
-            return []
-            
         # Se for imagem PIL ou bytes de print colado
         if isinstance(item, (Image.Image, bytes)):
             buf = io.BytesIO()
             if isinstance(item, bytes):
                 buf.write(item)
             else:
-                # Verificação extra para evitar AttributeError em NoneType dentro da tupla
-                if hasattr(item, 'save'):
-                    item.save(buf, format="PNG")
-                else:
-                    return []
+                item.save(buf, format="PNG")
             buf.seek(0)
             return [InlineImage(doc_template, buf, width=Mm(largura_mm))]
         
-        # Se for upload de arquivo
-        if hasattr(item, 'name'):
-            extensao = item.name.lower()
-            if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
-                res = excel_para_imagem(doc_template, item)
-                return [res] if res else []
-            
-            if extensao.endswith(".pdf"):
-                pdf_doc = fitz.open(stream=item.read(), filetype="pdf")
-                imgs = []
-                for pg in pdf_doc:
-                    pix = pg.get_pixmap(matrix=fitz.Matrix(2, 2))
-                    buf = io.BytesIO(pix.tobytes())
-                    imgs.append(InlineImage(doc_template, buf, width=Mm(largura_mm)))
-                pdf_doc.close()
-                return imgs
-            
-            return [InlineImage(doc_template, item, width=Mm(largura_mm))]
+        extensao = getattr(item, 'name', '').lower()
+        if marcador == "TABELA_TRANSFERENCIA" and (extensao.endswith(".xlsx") or extensao.endswith(".xls")):
+            res = excel_para_imagem(doc_template, item)
+            return [res] if res else []
         
-        return []
+        if extensao.endswith(".pdf"):
+            pdf_doc = fitz.open(stream=item.read(), filetype="pdf")
+            imgs = []
+            for pg in pdf_doc:
+                pix = pg.get_pixmap(matrix=fitz.Matrix(2, 2))
+                buf = io.BytesIO(pix.tobytes())
+                imgs.append(InlineImage(doc_template, buf, width=Mm(largura_mm)))
+            pdf_doc.close()
+            return imgs
+        
+        return [InlineImage(doc_template, item, width=Mm(largura_mm))]
     except Exception as e:
         st.error(f"Erro no marcador {marcador}: {e}")
         return []
@@ -172,12 +131,13 @@ def gerar_pdf(docx_path, output_dir):
 
 # --- UI ---
 st.title("Automação de Relatórios Assistenciais")
-st.caption("Versão 0.4.7 - Estabilidade Crítica (Anti-NoneType)")
+st.caption("Versão 0.4.3 - Dashboard de Alta Performance")
 
 tab_manual, tab_arquivos = st.tabs(["📝 Dados Manuais", "📁 Gestão de Evidências"])
 ctx_manual = {}
 
 with tab_manual:
+    # Seção de Dados Manuais mantida sem alterações estéticas conforme solicitado
     st.markdown("### Preencha os dados abaixo")
     ctx_manual["SISTEMA_MES_REFERENCIA"] = st.text_input("Mês de Referência (Ex: Janeiro/2026)")
     c1, c2 = st.columns(2)
@@ -208,6 +168,7 @@ with tab_arquivos:
         "PDF_OUVIDORIA_INTERNA": "Relatório Ouvidoria"
     }
     
+    # Agrupamento lógico para os cards
     blocos = [
         ["EXCEL_META_ATENDIMENTOS", "IMAGEM_PRINT_ATENDIMENTO", "PRINT_CLASSIFICACAO", "IMAGEM_DOCUMENTO_RAIO_X"],
         ["TABELA_TRANSFERENCIA", "GRAFICO_TRANSFERENCIA"],
@@ -216,33 +177,31 @@ with tab_arquivos:
     ]
 
     for b_idx, lista_m in enumerate(blocos):
+        # Abre o card sombreado (dashboard style)
         st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
+        
         for idx, m in enumerate(lista_m):
             target_col = col1 if idx % 2 == 0 else col2
             with target_col:
                 st.markdown(f"<span class='upload-label'>{labels.get(m, m)}</span>", unsafe_allow_html=True)
+                
+                # Ações de Upload e Print lado a lado
                 c_btn1, c_btn2 = st.columns([1, 1.2])
                 with c_btn1:
                     pasted = paste_image_button(label="Colar print", key=f"p_{m}_{b_idx}")
-                    
-                    # Verificação tripla de segurança para evitar o erro NoneType
                     if pasted is not None:
-                        img_obj = getattr(pasted, "image_data", None)
-                        
-                        if img_obj is not None and hasattr(img_obj, 'save'):
-                            try:
-                                buf = io.BytesIO()
-                                img_obj.save(buf, format="PNG")
-                                img_bytes = buf.getvalue()
-                                nome_p = f"Captura_{len(st.session_state.arquivos_por_marcador[m]) + 1}.png"
-                                st.session_state.arquivos_por_marcador[m].append({
-                                    "name": nome_p, "content": img_obj, "preview": img_bytes, "type": "print"
-                                })
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao capturar print: {e}")
-
+                        # Processa a imagem do clipboard imediatamente
+                        imagem_pil = pasted.image_data
+                        buf = io.BytesIO()
+                        imagem_pil.save(buf, format="PNG")
+                        img_bytes = buf.getvalue()
+                        nome_p = f"Captura_{len(st.session_state.arquivos_por_marcador[m]) + 1}.png"
+                        st.session_state.arquivos_por_marcador[m].append({
+                            "name": nome_p, "content": img_bytes, "preview": img_bytes, "type": "print"
+                        })
+                        st.rerun()
+                
                 with c_btn2:
                     tipo_f = ['png', 'jpg', 'pdf', 'xlsx', 'xls'] if m == "TABELA_TRANSFERENCIA" else ['png', 'jpg', 'pdf']
                     f_up = st.file_uploader("Upload", type=tipo_f, key=f"f_{m}_{b_idx}", accept_multiple_files=True, label_visibility="collapsed")
@@ -254,6 +213,7 @@ with tab_arquivos:
                                 })
                         st.rerun()
 
+                # Lista de arquivos anexados (Prints e Uploads)
                 if st.session_state.arquivos_por_marcador[m]:
                     for i_idx, item in enumerate(st.session_state.arquivos_por_marcador[m]):
                         with st.expander(f"📄 {item['name']}"):
@@ -261,27 +221,25 @@ with tab_arquivos:
                             if st.button("Remover", key=f"del_{m}_{i_idx}_{b_idx}", use_container_width=True):
                                 st.session_state.arquivos_por_marcador[m].pop(i_idx)
                                 st.rerun()
+        # Fecha o card sombreado
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- BOTÃO FINAL (VERDE) ---
+# --- BOTÃO FINAL ---
 st.write("")
-if st.button("🚀 FINALIZAR E GERAR RELATÓRIO PDF", use_container_width=True, type="primary"):
+if st.button("🚀 FINALIZAR E GERAR RELATÓRIO PDF", use_container_width=True):
     if not ctx_manual.get("SISTEMA_MES_REFERENCIA"):
         st.error("O campo 'Mês de Referência' é obrigatório.")
     else:
         try:
-            # Cálculo Automático de Médicos
-            mc_val = ctx_manual.get("ANALISTA_MEDICO_CLINICO") or "0"
-            mp_val = ctx_manual.get("ANALISTA_MEDICO_PEDIATRA") or "0"
-            try:
-                ctx_manual["SISTEMA_TOTAL_MEDICOS"] = int(mc_val) + int(mp_val)
-            except:
-                ctx_manual["SISTEMA_TOTAL_MEDICOS"] = 0
+            # Cálculo de Médicos
+            mc = int(ctx_manual.get("ANALISTA_MEDICO_CLINICO") or 0)
+            mp = int(ctx_manual.get("ANALISTA_MEDICO_PEDIATRA") or 0)
+            ctx_manual["SISTEMA_TOTAL_MEDICOS"] = mc + mp
 
             with tempfile.TemporaryDirectory() as tmp:
                 docx_path = os.path.join(tmp, "temp.docx")
                 doc = DocxTemplate("template.docx")
-                with st.spinner("Consolidando evidências e respeitando dimensões..."):
+                with st.spinner("Gerando documento..."):
                     dados_finais = ctx_manual.copy()
                     for m in DIMENSOES_CAMPOS.keys():
                         imgs = []
