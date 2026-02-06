@@ -102,9 +102,9 @@ def gerar_pdf(docx_path, output_dir):
 
 # --- INTERFACE (UI) ---
 st.title("📑 Automação de Relatórios - Backup Tático")
-st.caption("Versão 0.4.3 - Ajuste de UX no Clipboard")
+st.caption("Versão 0.4.3 - Feedback Instantâneo de Clipboard")
 
-# Inicialização do estado para imagens coladas
+# Inicialização do estado para persistência
 if 'pasted_images' not in st.session_state:
     st.session_state.pasted_images = {}
 
@@ -130,81 +130,79 @@ campos_upload = {
     "PRINT_CLASSIFICACAO": "Classificação de Risco"
 }
 
-with st.form("form_v4_3"):
-    tab1, tab2 = st.tabs(["📝 Dados Manuais e Cálculos", "🖼️ Evidências Digitais"])
-    contexto = {}
+# Criamos as abas fora de um formulário para permitir interatividade em tempo real
+tab1, tab2 = st.tabs(["📝 Dados Manuais e Cálculos", "🖼️ Evidências Digitais"])
+contexto = {}
+
+with tab1:
+    c1, c2 = st.columns(2)
+    # Usamos o 'key' para que o Streamlit salve o valor automaticamente no session_state
+    for campo in campos_texto_col1:
+        contexto[campo] = c1.text_input(campo.replace("_", " "), key=f"input_{campo}")
+    for campo in campos_texto_col2:
+        contexto[campo] = c2.text_input(campo.replace("_", " "), key=f"input_{campo}")
     
-    with tab1:
-        c1, c2 = st.columns(2)
-        for campo in campos_texto_col1:
-            contexto[campo] = c1.text_input(campo.replace("_", " "))
-        for campo in campos_texto_col2:
-            contexto[campo] = c2.text_input(campo.replace("_", " "))
-        
+    st.write("---")
+    st.subheader("📊 Indicadores de Transferência")
+    c3, c4 = st.columns(2)
+    contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências", step=1, key="input_SISTEMA_TOTAL_DE_TRANSFERENCIA")
+    contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", key="input_SISTEMA_TAXA_DE_TRANSFERENCIA")
+
+with tab2:
+    st.info("💡 Clique em 'Colar' para anexar prints diretamente ou carregue ficheiros abaixo.")
+    uploads = {}
+    c_up1, c_up2 = st.columns(2)
+    
+    for i, (marcador, label) in enumerate(campos_upload.items()):
+        col = c_up1 if i % 2 == 0 else c_up2
+        with col:
+            st.write(f"**{label}**")
+            
+            # Componente de Colar (Fora do Form = Execução Imediata)
+            pasted = paste_image_button(
+                label=f"📋 Colar Print", 
+                key=f"paste_{marcador}"
+            )
+            
+            # Lógica de anexo e feedback instantâneo
+            if pasted and pasted.image_data:
+                st.session_state.pasted_images[marcador] = pasted.image_data
+                # Feedback visual imediato
+                st.toast(f"✅ Print anexado com sucesso em: {label}", icon="📸")
+                st.success(f"Captura realizada!")
+
+            # Uploader tradicional
+            uploads[marcador] = st.file_uploader(
+                "Ou escolha um ficheiro", 
+                type=['png', 'jpg', 'pdf', 'xlsx', 'xls'], 
+                key=f"file_{marcador}",
+                label_visibility="collapsed"
+            )
+            
+            # Indicador discreto de conteúdo presente
+            if marcador in st.session_state.pasted_images and not uploads[marcador]:
+                st.caption("📎 *Imagem capturada do clipboard pronta para o relatório.*")
         st.write("---")
-        st.subheader("📊 Indicadores de Transferência")
-        c3, c4 = st.columns(2)
-        contexto["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c3.number_input("Total de Transferências", step=1, value=0)
-        contexto["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c4.text_input("Taxa de Transferência (Ex: 0,76%)", value="0,00%")
 
-    with tab2:
-        st.info("💡 Você pode carregar um ficheiro ou colar um print diretamente do clipboard.")
-        uploads = {}
-        c_up1, c_up2 = st.columns(2)
-        
-        for i, (marcador, label) in enumerate(campos_upload.items()):
-            col = c_up1 if i % 2 == 0 else c_up2
-            with col:
-                st.write(f"**{label}**")
-                
-                # Botão de Colar (Clipboard)
-                pasted = paste_image_button(
-                    label=f"📋 Colar para {label}", 
-                    key=f"paste_{marcador}"
-                )
-                
-                # Lógica de anexo com feedback transitório (Toast)
-                if pasted and pasted.image_data:
-                    st.session_state.pasted_images[marcador] = pasted.image_data
-                    # O toast aparece no canto e some sozinho, resolvendo o problema da persistência
-                    st.toast(f"✅ Print anexado em: {label}")
-                
-                # Uploader de Ficheiro (Tradicional)
-                uploads[marcador] = st.file_uploader(
-                    "Ou escolha um ficheiro", 
-                    type=['png', 'jpg', 'pdf', 'xlsx', 'xls'], 
-                    key=f"file_{marcador}",
-                    label_visibility="collapsed"
-                )
-                
-                # Indicador visual discreto de estado
-                if marcador in st.session_state.pasted_images and not uploads[marcador]:
-                    st.caption("📎 *Imagem capturada do clipboard*")
-            st.write("---")
-
-    btn_gerar = st.form_submit_button("🚀 GERAR RELATÓRIO PDF FINAL")
-
-if btn_gerar:
+# Botão de Gerar Relatório (Agora um st.button normal)
+if st.button("🚀 GERAR RELATÓRIO PDF FINAL", use_container_width=True):
     if not contexto["SISTEMA_MES_REFERENCIA"]:
         st.error("O campo 'Mês de Referência' é obrigatório.")
     else:
         try:
-            # Cálculo Automático: Soma de Médicos
-            m_clinico = int(contexto.get("ANALISTA_MEDICO_CLINICO", 0) or 0)
-            m_pediatra = int(contexto.get("ANALISTA_MEDICO_PEDIATRA", 0) or 0)
-            contexto["SISTEMA_TOTAL_MEDICOS"] = m_clinico + m_pediatra
+            # Cálculos Automáticos
+            m_c = int(contexto.get("input_ANALISTA_MEDICO_CLINICO") or 0)
+            m_p = int(contexto.get("input_ANALISTA_MEDICO_PEDIATRA") or 0)
+            contexto["SISTEMA_TOTAL_MEDICOS"] = m_c + m_p
 
             with tempfile.TemporaryDirectory() as pasta_temp:
                 docx_temp = os.path.join(pasta_temp, "relatorio.docx")
                 doc = DocxTemplate("template.docx")
 
-                with st.spinner("Processando arquivos e capturas de tela..."):
+                with st.spinner("Consolidando evidências..."):
                     for marcador in campos_upload.keys():
-                        # Prioridade: Ficheiro carregado > Imagem colada
-                        arquivo_final = uploads.get(marcador)
-                        if not arquivo_final:
-                            arquivo_final = st.session_state.pasted_images.get(marcador)
-                        
+                        # Prioridade: Ficheiro > Clipboard
+                        arquivo_final = uploads.get(marcador) or st.session_state.pasted_images.get(marcador)
                         contexto[marcador] = processar_anexo(doc, arquivo_final, marcador)
 
                 doc.render(contexto)
@@ -215,11 +213,13 @@ if btn_gerar:
                     
                     if pdf_final and os.path.exists(pdf_final):
                         with open(pdf_final, "rb") as f:
-                            st.success("Relatório gerado com sucesso.")
-                            nome_arquivo = f"Relatorio_{contexto['SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
-                            st.download_button("📥 Baixar Relatório PDF", f.read(), nome_arquivo, "application/pdf")
+                            st.success("Relatório gerado com sucesso!")
+                            nome_arquivo = f"Relatorio_{contexto['input_SISTEMA_MES_REFERENCIA'].replace('/', '-')}.pdf"
+                            st.download_button("📥 Baixar PDF", f.read(), nome_arquivo, "application/pdf")
                     else:
                         st.error("Falha na conversão para PDF.")
         except Exception as e:
             st.error(f"Erro Crítico: {e}")
 
+st.markdown("---")
+st.caption("Desenvolvido por Leonardo Barcelos Martins | Backup Tático")
