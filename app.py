@@ -10,9 +10,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from streamlit_paste_button import paste_image_button
 from PIL import Image
+import platform
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.6.4", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.6.6", layout="wide")
 
 # --- CUSTOM CSS PARA DASHBOARD ---
 st.markdown("""
@@ -32,6 +33,7 @@ st.markdown("""
         border: none !important;
         width: 100% !important;
         font-weight: bold !important;
+        height: 3em !important;
     }
     .upload-label { font-weight: bold; color: #1f2937; margin-bottom: 8px; display: block; }
     </style>
@@ -51,6 +53,9 @@ DIMENSOES_CAMPOS = {
 # --- ESTADO DA SESSÃO ---
 if 'dados_sessao' not in st.session_state:
     st.session_state.dados_sessao = {m: [] for m in DIMENSOES_CAMPOS.keys()}
+
+if 'historico_capturas' not in st.session_state:
+    st.session_state.historico_capturas = {m: 0 for m in DIMENSOES_CAMPOS.keys()}
 
 def excel_para_imagem(doc_template, arquivo_excel):
     try:
@@ -100,33 +105,51 @@ def processar_item_lista(doc_template, item, marcador):
         return [InlineImage(doc_template, item, width=Mm(largura))]
     except Exception: return []
 
+def converter_para_pdf(docx_path, output_dir):
+    comando = 'libreoffice'
+    if platform.system() == "Windows":
+        caminhos_possiveis = [
+            'libreoffice',
+            r'C:\Program Files\LibreOffice\program\soffice.exe',
+            r'C:\Program Files (x86)\LibreOffice\program\soffice.exe'
+        ]
+        for p in caminhos_possiveis:
+            try:
+                subprocess.run([p, '--version'], capture_output=True, check=True)
+                comando = p
+                break
+            except: continue
+    subprocess.run([comando, '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path], check=True)
+
 # --- UI ---
 st.title("Automação de Relatórios - UPA Nova Cidade")
-st.caption("Versão 0.6.4 - Suporte para Download em Word (.docx)")
+st.caption("Versão 6.6")
 
-t_manual, t_evidencia = st.tabs(["📝 Dados", "📁 Evidências"])
-ctx_manual = {}
+t_manual, t_evidencia = st.tabs(["Dados", "Arquivos"])
 
 with t_manual:
     st.markdown("### Preencha os campos de texto")
-    c1, c2 = st.columns(2)
-    ctx_manual["SISTEMA_MES_REFERENCIA"] = c1.text_input("Mês de Referência", key="in_mes")
-    ctx_manual["ANALISTA_TOTAL_ATENDIMENTOS"] = c2.text_input("Total de Atendimentos", key="in_total")
     
-    c3, c4, c5 = st.columns(3)
-    ctx_manual["ANALISTA_MEDICO_CLINICO"] = c3.text_input("Médicos Clínicos", key="in_mc")
-    ctx_manual["ANALISTA_MEDICO_PEDIATRA"] = c4.text_input("Médicos Pediatras", key="in_mp")
-    ctx_manual["ANALISTA_ODONTO_CLINICO"] = c5.text_input("Odonto Clínico", key="in_oc")
+    # Reestruturação para conjuntos de 3 colunas (c1c2c3, c4c5c6, etc.)
+    row1_c1, row1_c2, row1_c3 = st.columns(3)
+    with row1_c1: st.text_input("Mês de Referência", key="in_mes")
+    with row1_c2: st.text_input("Total de Atendimentos", key="in_total")
+    with row1_c3: st.text_input("Total Raio-X", key="in_rx")
     
-    c6, c7, c8 = st.columns(3)
-    ctx_manual["ANALISTA_ODONTO_PED"] = c6.text_input("Odonto Ped", key="in_op")
-    ctx_manual["TOTAL_PACIENTES_CCIH"] = c7.text_input("Pacientes CCIH", key="in_ccih")
-    ctx_manual["OUVIDORIA_INTERNA"] = c8.text_input("Ouvidoria Interna", key="in_oi")
+    row2_c4, row2_c5, row2_c6 = st.columns(3)
+    with row2_c4: st.text_input("Médicos Clínicos", key="in_mc")
+    with row2_c5: st.text_input("Médicos Pediatras", key="in_mp")
+    with row2_c6: st.text_input("Odonto Clínico", key="in_oc")
     
-    c9, c10, c11 = st.columns(3)
-    ctx_manual["OUVIDORIA_EXTERNA"] = c9.text_input("Ouvidoria Externa", key="in_oe")
-    ctx_manual["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c10.number_input("Total de Transferências", step=1, key="in_tt")
-    ctx_manual["SISTEMA_TAXA_DE_TRANSFERENCIA"] = c11.text_input("Taxa de Transferência (%)", key="in_taxa")
+    row3_c7, row3_c8, row3_c9 = st.columns(3)
+    with row3_c7: st.text_input("Odonto Ped", key="in_op")
+    with row3_c8: st.text_input("Pacientes CCIH", key="in_ccih")
+    with row3_c9: st.text_input("Ouvidoria Interna", key="in_oi")
+    
+    row4_c10, row4_c11, row4_c12 = st.columns(3)
+    with row4_c10: st.text_input("Ouvidoria Externa", key="in_oe")
+    with row4_c11: st.number_input("Total de Transferências", step=1, key="in_tt")
+    with row4_c12: st.text_input("Taxa de Transferência (%)", key="in_taxa")
 
 with t_evidencia:
     labels = {
@@ -158,17 +181,19 @@ with t_evidencia:
                 with ca:
                     key_p = f"p_{m}_{len(st.session_state.dados_sessao[m])}"
                     pasted = paste_image_button(label="Colar Print", key=key_p)
-                    
                     if pasted is not None and pasted.image_data is not None:
-                        try:
-                            img_pil = pasted.image_data
-                            buf = io.BytesIO()
-                            img_pil.save(buf, format="PNG")
-                            b_data = buf.getvalue()
-                            nome = f"Captura_{len(st.session_state.dados_sessao[m]) + 1}.png"
-                            st.session_state.dados_sessao[m].append({"name": nome, "content": b_data, "type": "p"})
-                            st.rerun()
-                        except: pass
+                        ts = getattr(pasted, 'time_now', 0)
+                        if ts > st.session_state.historico_capturas[m]:
+                            try:
+                                img_pil = pasted.image_data
+                                buf = io.BytesIO()
+                                img_pil.save(buf, format="PNG")
+                                b_data = buf.getvalue()
+                                nome = f"Captura_{len(st.session_state.dados_sessao[m]) + 1}.png"
+                                st.session_state.dados_sessao[m].append({"name": nome, "content": b_data, "type": "p"})
+                                st.session_state.historico_capturas[m] = ts
+                                st.rerun()
+                            except: pass
 
                 with cb:
                     f_up = st.file_uploader("Upload", type=['png', 'jpg', 'pdf', 'xlsx'], key=f"f_{m}_{b_idx}", label_visibility="collapsed")
@@ -179,7 +204,7 @@ with t_evidencia:
 
                 if st.session_state.dados_sessao[m]:
                     for i_idx, item in enumerate(st.session_state.dados_sessao[m]):
-                        with st.expander(f"📄 {item['name']}", expanded=False):
+                        with st.expander(f"{item['name']}", expanded=False):
                             if item['type'] == "p" or not item['name'].lower().endswith(('.pdf', '.xlsx')):
                                 st.image(item['content'], use_container_width=True)
                             if st.button("Remover", key=f"del_{m}_{i_idx}_{b_idx}"):
@@ -187,62 +212,68 @@ with t_evidencia:
                                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-if st.button("🚀 FINALIZAR E GERAR RELATÓRIO", type="primary", use_container_width=True):
-    if not ctx_manual.get("SISTEMA_MES_REFERENCIA"):
+if st.button("FINALIZAR E GERAR RELATÓRIO", type="primary", use_container_width=True):
+    mes_ref = st.session_state.get("in_mes", "").strip()
+    if not mes_ref:
         st.error("Mês de Referência é obrigatório.")
     else:
         try:
-            # Cálculos
-            mc = int(ctx_manual.get("ANALISTA_MEDICO_CLINICO") or 0)
-            mp = int(ctx_manual.get("ANALISTA_MEDICO_PEDIATRA") or 0)
-            ctx_manual["SISTEMA_TOTAL_MEDICOS"] = mc + mp
-
+            mc = int(st.session_state.get("in_mc", 0) or 0)
+            mp = int(st.session_state.get("in_mp", 0) or 0)
+            
             with tempfile.TemporaryDirectory() as tmp:
                 docx_p = os.path.join(tmp, "relatorio.docx")
                 doc = DocxTemplate("template.docx")
                 with st.spinner("Processando dados e gerando arquivos..."):
-                    # Popula o contexto com as InlineImages
+                    contexto_geracao = {
+                        "SISTEMA_MES_REFERENCIA": mes_ref,
+                        "ANALISTA_TOTAL_ATENDIMENTOS": st.session_state.get("in_total", ""),
+                        "TOTAL_RAIO_X": st.session_state.get("in_rx", ""),
+                        "ANALISTA_MEDICO_CLINICO": st.session_state.get("in_mc", ""),
+                        "ANALISTA_MEDICO_PEDIATRA": st.session_state.get("in_mp", ""),
+                        "ANALISTA_ODONTO_CLINICO": st.session_state.get("in_oc", ""),
+                        "ANALISTA_ODONTO_PED": st.session_state.get("in_op", ""),
+                        "TOTAL_PACIENTES_CCIH": st.session_state.get("in_ccih", ""),
+                        "OUVIDORIA_INTERNA": st.session_state.get("in_oi", ""),
+                        "OUVIDORIA_EXTERNA": st.session_state.get("in_oe", ""),
+                        "SISTEMA_TOTAL_DE_TRANSFERENCIA": st.session_state.get("in_tt", 0),
+                        "SISTEMA_TAXA_DE_TRANSFERENCIA": st.session_state.get("in_taxa", ""),
+                        "SISTEMA_TOTAL_MEDICOS": mc + mp
+                    }
+                    
                     for m in DIMENSOES_CAMPOS.keys():
                         imgs_doc = []
                         for item in st.session_state.dados_sessao[m]:
                             res = processar_item_lista(doc, item['content'], m)
                             if res: imgs_doc.extend(res)
-                        ctx_manual[m] = imgs_doc
+                        contexto_geracao[m] = imgs_doc
                     
-                    # Renderiza e salva o DOCX
-                    doc.render(ctx_manual)
+                    doc.render(contexto_geracao)
                     doc.save(docx_p)
                     
-                    # Interface de Download
                     st.success("✅ Arquivos gerados com sucesso!")
-                    
-                    col_down1, col_down2 = st.columns(2)
-                    
-                    with col_down1:
-                        # Opção de baixar em WORD
+                    c_down1, c_down2 = st.columns(2)
+                    with c_down1:
                         with open(docx_p, "rb") as f_word:
                             st.download_button(
-                                label="📥 Baixar em WORD (.docx)",
+                                label="Baixar em WORD (.docx)",
                                 data=f_word.read(),
-                                file_name=f"Relatorio_{ctx_manual['SISTEMA_MES_REFERENCIA']}.docx",
+                                file_name=f"Relatorio_{mes_ref}.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                 use_container_width=True
                             )
-                    
-                    with col_down2:
-                        # Conversão e opção de baixar em PDF
-                        subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', tmp, docx_p], check=True)
+                    with c_down2:
+                        converter_para_pdf(docx_p, tmp)
                         pdf_final = os.path.join(tmp, "relatorio.pdf")
                         if os.path.exists(pdf_final):
                             with open(pdf_final, "rb") as f_pdf:
                                 st.download_button(
                                     label="📥 Baixar em PDF",
                                     data=f_pdf.read(),
-                                    file_name=f"Relatorio_{ctx_manual['SISTEMA_MES_REFERENCIA']}.pdf",
+                                    file_name=f"Relatorio_{mes_ref}.pdf",
                                     mime="application/pdf",
                                     use_container_width=True
                                 )
         except Exception as e: st.error(f"Erro Crítico: {e}")
 
-st.caption("Desenvolvido por Leonardo Barcelos Martins | Backup Tático")
-
+st.caption("Desenvolvido por Leonardo Barcelos Martins")
