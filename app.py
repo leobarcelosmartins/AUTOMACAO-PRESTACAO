@@ -12,7 +12,7 @@ from streamlit_paste_button import paste_image_button
 from PIL import Image
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.6.2", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.6.3", layout="wide")
 
 # --- CUSTOM CSS PARA DASHBOARD ---
 st.markdown("""
@@ -52,13 +52,8 @@ DIMENSOES_CAMPOS = {
 if 'dados_sessao' not in st.session_state:
     st.session_state.dados_sessao = {m: [] for m in DIMENSOES_CAMPOS.keys()}
 
-# Rastreador de tempo por marcador para evitar contaminação entre campos
-if 'ultimo_print_time' not in st.session_state:
-    st.session_state.ultimo_print_time = {m: 0 for m in DIMENSOES_CAMPOS.keys()}
-
 def excel_para_imagem(doc_template, arquivo_excel):
     try:
-        # Garante que o arquivo excel seja lido do início
         if hasattr(arquivo_excel, 'seek'): arquivo_excel.seek(0)
         df = pd.read_excel(arquivo_excel, sheet_name="TRANSFERENCIAS", usecols=[3, 4], skiprows=2, nrows=14, header=None)
         df = df.fillna('')
@@ -87,9 +82,7 @@ def excel_para_imagem(doc_template, arquivo_excel):
 def processar_item_lista(doc_template, item, marcador):
     largura = DIMENSOES_CAMPOS.get(marcador, 165)
     try:
-        # Reset do cursor de leitura para evitar arquivos vazios no Word
         if hasattr(item, 'seek'): item.seek(0)
-        
         if isinstance(item, bytes):
             return [InlineImage(doc_template, io.BytesIO(item), width=Mm(largura))]
         ext = getattr(item, 'name', '').lower()
@@ -109,25 +102,28 @@ def processar_item_lista(doc_template, item, marcador):
 
 # --- UI ---
 st.title("Automação de Relatórios - UPA Nova Cidade")
-st.caption("Versão 0.6.2 - Estabilização de Listagem e Anexos")
+st.caption("Versão 0.6.3 - Fix de Listagem e Layout de Dados")
 
 t_manual, t_evidencia = st.tabs(["📝 Dados", "📁 Evidências"])
 ctx_manual = {}
 
 with t_manual:
     st.markdown("### Preencha os campos de texto")
+    # Restaurando layout exato (2 colunas, depois 3 colunas por linha)
     c1, c2 = st.columns(2)
-    # Atribuimos o valor diretamente ao ctx_manual para garantir que o botão "Gerar" o encontre
     ctx_manual["SISTEMA_MES_REFERENCIA"] = c1.text_input("Mês de Referência", key="in_mes")
     ctx_manual["ANALISTA_TOTAL_ATENDIMENTOS"] = c2.text_input("Total de Atendimentos", key="in_total")
+    
     c3, c4, c5 = st.columns(3)
     ctx_manual["ANALISTA_MEDICO_CLINICO"] = c3.text_input("Médicos Clínicos", key="in_mc")
     ctx_manual["ANALISTA_MEDICO_PEDIATRA"] = c4.text_input("Médicos Pediatras", key="in_mp")
     ctx_manual["ANALISTA_ODONTO_CLINICO"] = c5.text_input("Odonto Clínico", key="in_oc")
+    
     c6, c7, c8 = st.columns(3)
     ctx_manual["ANALISTA_ODONTO_PED"] = c6.text_input("Odonto Ped", key="in_op")
     ctx_manual["TOTAL_PACIENTES_CCIH"] = c7.text_input("Pacientes CCIH", key="in_ccih")
     ctx_manual["OUVIDORIA_INTERNA"] = c8.text_input("Ouvidoria Interna", key="in_oi")
+    
     c9, c10, c11 = st.columns(3)
     ctx_manual["OUVIDORIA_EXTERNA"] = c9.text_input("Ouvidoria Externa", key="in_oe")
     ctx_manual["SISTEMA_TOTAL_DE_TRANSFERENCIA"] = c10.number_input("Total de Transferências", step=1, key="in_tt")
@@ -161,22 +157,20 @@ with t_evidencia:
                 st.markdown(f"<span class='upload-label'>{labels.get(m, m)}</span>", unsafe_allow_html=True)
                 ca, cb = st.columns([1, 1])
                 with ca:
-                    pasted = paste_image_button(label="Colar Print", key=f"p_{m}_{b_idx}")
-                    if pasted is not None:
-                        img_pil = getattr(pasted, 'image_data', None)
-                        p_time = getattr(pasted, 'time_now', 0)
-                        
-                        # CORREÇÃO: Só salva se houver imagem E se for um clique novo (impede duplicação e vazamento)
-                        if img_pil is not None and p_time > st.session_state.ultimo_print_time.get(m, 0):
-                            try:
-                                buf = io.BytesIO()
-                                img_pil.save(buf, format="PNG")
-                                b_data = buf.getvalue()
-                                nome = f"Captura_{len(st.session_state.dados_sessao[m]) + 1}.png"
-                                st.session_state.dados_sessao[m].append({"name": nome, "content": b_data, "type": "p"})
-                                st.session_state.ultimo_print_time[m] = p_time # Registra o tempo para este campo
-                                st.rerun()
-                            except: pass
+                    # TRUQUE DA CHAVE DINÂMICA: A chave muda conforme a lista cresce, resetando o componente
+                    key_p = f"p_{m}_{len(st.session_state.dados_sessao[m])}"
+                    pasted = paste_image_button(label="Colar Print", key=key_p)
+                    
+                    if pasted is not None and pasted.image_data is not None:
+                        try:
+                            img_pil = pasted.image_data
+                            buf = io.BytesIO()
+                            img_pil.save(buf, format="PNG")
+                            b_data = buf.getvalue()
+                            nome = f"Captura_{len(st.session_state.dados_sessao[m]) + 1}.png"
+                            st.session_state.dados_sessao[m].append({"name": nome, "content": b_data, "type": "p"})
+                            st.rerun()
+                        except: pass
 
                 with cb:
                     f_up = st.file_uploader("Upload", type=['png', 'jpg', 'pdf', 'xlsx'], key=f"f_{m}_{b_idx}", label_visibility="collapsed")
@@ -185,7 +179,7 @@ with t_evidencia:
                             st.session_state.dados_sessao[m].append({"name": f_up.name, "content": f_up, "type": "f"})
                             st.rerun()
 
-                # --- LISTAGEM DOS PRINTS (A PARTE QUE VOCÊ DESEJA) ---
+                # LISTAGEM (A parte responsável por mostrar os arquivos anexados)
                 if st.session_state.dados_sessao[m]:
                     for i_idx, item in enumerate(st.session_state.dados_sessao[m]):
                         with st.expander(f"📄 {item['name']}", expanded=False):
@@ -201,7 +195,7 @@ if st.button("🚀 FINALIZAR E GERAR RELATÓRIO PDF", type="primary", use_contai
         st.error("Mês de Referência é obrigatório.")
     else:
         try:
-            # Cálculos médicos
+            # Cálculos
             mc = int(ctx_manual.get("ANALISTA_MEDICO_CLINICO") or 0)
             mp = int(ctx_manual.get("ANALISTA_MEDICO_PEDIATRA") or 0)
             ctx_manual["SISTEMA_TOTAL_MEDICOS"] = mc + mp
@@ -209,15 +203,14 @@ if st.button("🚀 FINALIZAR E GERAR RELATÓRIO PDF", type="primary", use_contai
             with tempfile.TemporaryDirectory() as tmp:
                 docx_p = os.path.join(tmp, "relatorio.docx")
                 doc = DocxTemplate("template.docx")
-                with st.spinner("Construindo relatório..."):
-                    # --- INCLUSÃO NO RELATÓRIO (A PARTE QUE VOCÊ DESEJA) ---
+                with st.spinner("Injetando dados e prints no relatório..."):
+                    # INCLUSÃO NO RELATÓRIO: Popula o contexto com as InlineImages
                     for m in DIMENSOES_CAMPOS.keys():
-                        imgs = []
+                        imgs_doc = []
                         for item in st.session_state.dados_sessao[m]:
-                            # processar_item_lista transforma o dado bruto em InlineImage para o Word
                             res = processar_item_lista(doc, item['content'], m)
-                            if res: imgs.extend(res)
-                        ctx_manual[m] = imgs # injeta no dicionário final
+                            if res: imgs_doc.extend(res)
+                        ctx_manual[m] = imgs_doc
                     
                     doc.render(ctx_manual)
                     doc.save(docx_p)
