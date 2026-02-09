@@ -42,7 +42,7 @@ DIMENSOES_CAMPOS = {
     "EXCEL_META_ATENDIMENTOS": 165, "IMAGEM_PRINT_ATENDIMENTO": 165,
     "IMAGEM_DOCUMENTO_RAIO_X": 165, "TABELA_TRANSFERENCIA": 90,
     "GRAFICO_TRANSFERENCIA": 160, "TABELA_TOTAL_OBITO": 165,
-    "TABELA_OBITO": 180, "TABELA_CCIH": 180, "IMAGEM_NEP": 180,
+    "TABELA_OBITO": 180, "TABELA_CCIH": 180, "IMAGEM_NEP": 160,
     "IMAGEM_TREINAMENTO_INTERNO": 180, "IMAGEM_MELHORIAS": 180,
     "GRAFICO_OUVIDORIA": 155, "PDF_OUVIDORIA_INTERNA": 165,
     "TABELA_QUALITATIVA_IMG": 170, "PRINT_CLASSIFICACAO": 160
@@ -137,8 +137,8 @@ with t_evidencia:
         "TABELA_TOTAL_OBITO": "Tab. Total Óbito", "TABELA_OBITO": "Tab. Óbito", 
         "TABELA_CCIH": "Tabela CCIH", "TABELA_QUALITATIVA_IMG": "Tab. Qualitativa",
         "IMAGEM_NEP": "Imagens NEP", "IMAGEM_TREINAMENTO_INTERNO": "Treinamento Interno", 
-        "IMAGEM_MELHORIAS": "Melhorias", "GRAFICO_OUVIDORIA": "Gráfico Ouvidoria", 
-        "PDF_OUVIDORIA_INTERNA": "Relatório Ouvidoria"
+        "IMAGEM_MELHORIAS": "Melhorias", "GRAFICO_OUVIDORIA": "Relatório Ouvidoria", 
+        "PDF_OUVIDORIA_INTERNA": "Tabelas Ouvidoria"
     }
     
     blocos = [
@@ -223,4 +223,5 @@ if st.button("🚀 FINALIZAR E GERAR RELATÓRIO PDF", type="primary", use_contai
         except Exception as e: st.error(f"Erro Crítico: {e}")
 
 st.caption("Desenvolvido por Leonardo Barcelos Martins")
+
 
