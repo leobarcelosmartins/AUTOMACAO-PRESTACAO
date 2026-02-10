@@ -15,7 +15,7 @@ import time
 import calendar
 
 # --- CONFIGURAÇÕES DE LAYOUT ---
-st.set_page_config(page_title="Gerador de Relatórios V0.7.7", layout="wide")
+st.set_page_config(page_title="Gerador de Relatórios V0.7.8", layout="wide")
 
 # --- CONSTANTES DO CONTRATO ---
 META_DIARIA_CONTRATO = 250
@@ -70,15 +70,35 @@ if 'dados_sessao' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3208/3208726.png", width=100)
-    st.title("Painel de Controle")
+    st.title("Painel de Controlo")
     st.markdown("---")
     total_anexos = sum(len(v) for v in st.session_state.dados_sessao.values())
     st.metric("Total de Anexos", total_anexos)
-    if st.button("🗑️ Limpar Todos os Arquivos", use_container_width=True):
+    if st.button("🗑️ Limpar Todos os Dados", use_container_width=True):
         st.session_state.dados_sessao = {m: [] for m in DIMENSOES_CAMPOS.keys()}
         st.rerun()
 
 # --- FUNÇÕES CORE ---
+def excel_para_imagem(doc_template, arquivo_excel):
+    try:
+        if hasattr(arquivo_excel, 'seek'): arquivo_excel.seek(0)
+        df = pd.read_excel(arquivo_excel, sheet_name="TRANSFERENCIAS", usecols=[3, 4], skiprows=2, nrows=14, header=None)
+        df = df.fillna('')
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.axis('off')
+        tabela = ax.table(cellText=df.values, loc='center', cellLoc='center', colWidths=[0.45, 0.45])
+        tabela.auto_set_font_size(False)
+        tabela.set_fontsize(11)
+        tabela.scale(1.2, 1.8)
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png', bbox_inches='tight', dpi=200)
+        plt.close(fig)
+        img_buf.seek(0)
+        return InlineImage(doc_template, img_buf, width=Mm(DIMENSOES_CAMPOS["TABELA_TRANSFERENCIA"]))
+    except Exception as e:
+        st.error(f"Erro Excel: {e}")
+        return None
+
 def converter_para_pdf(docx_path, output_dir):
     comando = 'libreoffice'
     if platform.system() == "Windows":
@@ -95,19 +115,42 @@ def processar_item_lista(doc_template, item, marcador):
     largura = DIMENSOES_CAMPOS.get(marcador, 165)
     try:
         if hasattr(item, 'seek'): item.seek(0)
-        return [InlineImage(doc_template, io.BytesIO(item) if isinstance(item, bytes) else item, width=Mm(largura))]
+        
+        # Se for um print (bytes puros no estado da sessão)
+        if isinstance(item, bytes):
+            return [InlineImage(doc_template, io.BytesIO(item), width=Mm(largura))]
+            
+        ext = getattr(item, 'name', '').lower()
+        
+        # Lógica para Excel
+        if marcador == "TABELA_TRANSFERENCIA" and (ext.endswith(".xlsx") or ext.endswith(".xls")):
+            res = excel_para_imagem(doc_template, item)
+            return [res] if res else []
+            
+        # Lógica para PDF (Converte cada página em imagem)
+        if ext.endswith(".pdf"):
+            pdf = fitz.open(stream=item.read(), filetype="pdf")
+            imgs = []
+            for pg in pdf:
+                pix = pg.get_pixmap(matrix=fitz.Matrix(2, 2))
+                imgs.append(InlineImage(doc_template, io.BytesIO(pix.tobytes()), width=Mm(largura)))
+            pdf.close()
+            return imgs
+            
+        # Lógica para imagens comuns (Upload)
+        return [InlineImage(doc_template, item, width=Mm(largura))]
     except Exception: return []
 
 # --- UI PRINCIPAL ---
 st.title("Automação de Relatórios - UPA Nova Cidade")
-st.caption("Versão 0.7.7 - Reatividade Total nas Metas Calculadas")
+st.caption("Versão 0.7.8 - Correção de Erro PIL e Suporte PDF")
 
-t_manual, t_evidencia = st.tabs(["Dados", "Evidências"])
+t_manual, t_evidencia = st.tabs(["📝 Dados", "📁 Evidências"])
 
 with t_manual:
-    st.markdown("### Configuração do Período e Metas")
+    st.markdown("### 📅 Configuração do Período e Metas")
     
-    # Linha 1: Seleção de Mês e Ano (Gatilhos da Reatividade)
+    # Linha 1: Seleção de Mês e Ano
     c1, c2, c3 = st.columns(3)
     meses_pt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     with c1: 
@@ -124,14 +167,14 @@ with t_manual:
     meta_min = int(meta_calculada * 0.75)
     meta_max = int(meta_calculada * 1.25)
 
-    # Linha 2: Exibição Automática (Sem Key para evitar travamento de cache)
+    # Linha 2: Exibição Automática
     c4, c5, c6 = st.columns(3)
     with c4: st.text_input("Meta do Mês (Calculada)", value=str(meta_calculada), disabled=True)
     with c5: st.text_input("Meta -25% (Calculada)", value=str(meta_min), disabled=True)
     with c6: st.text_input("Meta +25% (Calculada)", value=str(meta_max), disabled=True)
 
     st.markdown("---")
-    st.markdown("### Dados Assistenciais")
+    st.markdown("### 🏥 Dados Assistenciais")
 
     # Linha 3: Atendimento e Raio-X
     c7, c8, c9 = st.columns(3)
@@ -203,15 +246,22 @@ with t_evidencia:
 
                 if st.session_state.dados_sessao[m]:
                     for i_idx, item in enumerate(st.session_state.dados_sessao[m]):
-                        with st.expander(f" {item['name']}", expanded=False):
-                            st.image(item['content'], use_container_width=True)
+                        with st.expander(f"📄 {item['name']}", expanded=False):
+                            # CORREÇÃO: Verifica se o arquivo é uma imagem antes de tentar renderizar com st.image
+                            is_image = item['type'] == "p" or item['name'].lower().endswith(('.png', '.jpg', '.jpeg'))
+                            if is_image:
+                                st.image(item['content'], use_container_width=True)
+                            else:
+                                ext = item['name'].split('.')[-1].upper()
+                                st.info(f"Visualização indisponível para arquivo {ext}. O conteúdo será processado na geração do relatório.")
+                                
                             if st.button("Remover", key=f"del_{m}_{i_idx}_{b_idx}"):
                                 st.session_state.dados_sessao[m].pop(i_idx)
                                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- GERAÇÃO FINAL ---
-if st.button("FINALIZAR E GERAR RELATÓRIO", type="primary", use_container_width=True):
+if st.button("🚀 FINALIZAR E GERAR RELATÓRIO", type="primary", use_container_width=True):
     try:
         progress_bar = st.progress(0)
         with tempfile.TemporaryDirectory() as tmp:
@@ -238,8 +288,8 @@ if st.button("FINALIZAR E GERAR RELATÓRIO", type="primary", use_container_width
                 "SISTEMA_TOTAL_DE_TRANSFERENCIA": st.session_state.get("in_tt", 0),
                 "SISTEMA_TAXA_DE_TRANSFERENCIA": st.session_state.get("in_taxa", ""),
                 "ANALISTA_TOTAL_OBITO": st.session_state.get("in_to", 0),
-                "ANALISTA_OBITO_MENOS_24": st.session_state.get("in_to_menor", 0),
-                "ANALISTA_OBITO_MAIS_24": st.session_state.get("in_to_maior", 0),
+                "ANALISTA_OBITO_MENOR": st.session_state.get("in_to_menor", 0),
+                "ANALISTA_OBITO_MAIOR": st.session_state.get("in_to_maior", 0),
                 "SISTEMA_TOTAL_MEDICOS": int(st.session_state.get("in_mc", 0) or 0) + int(st.session_state.get("in_mp", 0) or 0)
             }
 
@@ -258,14 +308,14 @@ if st.button("FINALIZAR E GERAR RELATÓRIO", type="primary", use_container_width
             c_down1, c_down2 = st.columns(2)
             with c_down1:
                 with open(docx_p, "rb") as f_w:
-                    st.download_button(label="Baixar WORD (.docx)", data=f_w.read(), file_name=f"RELATÓRIO ASSISTENCIAL MENSAL - UPA PACHECO_{mes_selecionado}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+                    st.download_button(label="📥 Baixar WORD (.docx)", data=f_w.read(), file_name=f"Relatorio_{mes_selecionado}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
             with c_down2:
                 try:
                     converter_para_pdf(docx_p, tmp)
                     pdf_p = os.path.join(tmp, "relatorio.pdf")
                     if os.path.exists(pdf_p):
                         with open(pdf_p, "rb") as f_p:
-                            st.download_button(label="Baixar PDF", data=f_p.read(), file_name=f"RELATÓRIO ASSISTENCIAL MENSAL - UPA PACHECO_{mes_selecionado}.pdf", mime="application/pdf", use_container_width=True)
+                            st.download_button(label="📥 Baixar PDF", data=f_p.read(), file_name=f"Relatorio_{mes_selecionado}.pdf", mime="application/pdf", use_container_width=True)
                 except: st.warning("LibreOffice não encontrado.")
     except Exception as e: st.error(f"Erro na geração: {e}")
 
